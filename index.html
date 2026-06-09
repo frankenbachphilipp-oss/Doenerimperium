@@ -25,6 +25,78 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 canvas.width = W; canvas.height = H;
 
+// ─── MOBILE DETECTION ───
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && !/Win/.test(navigator.platform));
+
+// Hidden input for mobile keyboard
+const mobileInput = document.createElement('input');
+mobileInput.type = 'text';
+mobileInput.autocomplete = 'off';
+mobileInput.autocorrect = 'off';
+mobileInput.autocapitalize = 'none';
+mobileInput.spellcheck = false;
+mobileInput.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;outline:none;padding:0;margin:0;';
+document.body.appendChild(mobileInput);
+
+let mobileInputActive = false;
+let mobileInputLastLen = 0;
+
+function activateMobileInput(initialValue) {
+  if (!isMobile) return;
+  mobileInput.value = initialValue || '';
+  mobileInputLastLen = mobileInput.value.length;
+  mobileInput.style.pointerEvents = 'auto';
+  mobileInput.focus();
+  const len = mobileInput.value.length;
+  mobileInput.setSelectionRange(len, len);
+  mobileInputActive = true;
+}
+function deactivateMobileInput() {
+  if (!isMobile) return;
+  mobileInput.blur();
+  mobileInput.style.pointerEvents = 'none';
+  mobileInputActive = false;
+}
+
+mobileInput.addEventListener('input', () => {
+  const val = mobileInput.value;
+  const newLen = val.length;
+  if (newLen > mobileInputLastLen) {
+    charTyped += val.slice(mobileInputLastLen);
+  } else if (newLen < mobileInputLastLen) {
+    keyPressed = 'Backspace';
+  }
+  mobileInputLastLen = newLen;
+});
+mobileInput.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === 'Enter') { keyPressed = 'Enter'; e.preventDefault(); }
+  if (e.key === 'Escape') { keyPressed = 'Escape'; }
+});
+mobileInput.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// Touch support for canvas clicks
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const r = canvas.getBoundingClientRect();
+  mouse.x = (t.clientX - r.left) * (W / r.width);
+  mouse.y = (t.clientY - r.top) * (H / r.height);
+  mouse.down = true; mouse.clicked = true;
+}, {passive: false});
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  mouse.down = false; mouse.released = true;
+}, {passive: false});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const r = canvas.getBoundingClientRect();
+  mouse.x = (t.clientX - r.left) * (W / r.width);
+  mouse.y = (t.clientY - r.top) * (H / r.height);
+}, {passive: false});
+
 function resizeCanvas() {
   const s = Math.min(window.innerWidth / W, window.innerHeight / H);
   canvas.style.width = s * W + 'px';
@@ -844,7 +916,7 @@ function drawMainMenu() {
   const btnQuit=new Button(cw-140,ch+150,280,50,'Beenden',C.RED,C.WHITE);
   btnLoad.enabled=true; // File picker always available
   btnNew.draw(); btnLoad.draw(); btnQuit.draw();
-  if(btnNew.update()){game.nameInput='DÖNERIMPERIUM™';game.namePhase='name';game.nameDialog=true;}
+  if(btnNew.update()){game.nameInput='DÖNERIMPERIUM™';game.namePhase='name';game.nameDialog=true;activateMobileInput(game.nameInput);}
   if(btnLoad.update()) game.setScreen('load_menu');
   if(btnQuit.update()) window.close();
 
@@ -864,8 +936,8 @@ function drawNameDialog() {
   drawText('ENTER = Starten   ESC = Abbrechen',FONTS.xs,C.GRAY,W/2,by+140,'center','top');
 
   if(keyPressed==='Enter'&&game.nameInput.trim()){
-    game.pendingName=game.nameInput.trim(); game.nameDialog=false; game.setScreen('difficulty'); consumeKey();
-  } else if(keyPressed==='Escape'){game.nameDialog=false;consumeKey();}
+    game.pendingName=game.nameInput.trim(); game.nameDialog=false; game.setScreen('difficulty'); consumeKey(); deactivateMobileInput();
+  } else if(keyPressed==='Escape'){game.nameDialog=false;consumeKey();deactivateMobileInput();}
   else if(keyPressed==='Backspace'){game.nameInput=game.nameInput.slice(0,-1);consumeKey();}
   else if(charTyped){game.nameInput+=(game.nameInput.length<30?charTyped:'');consumeKey();}
 }
@@ -1083,7 +1155,7 @@ function drawBranches() {
   const btnClose=new Button(lx+200,ly+lh+8,200,36,'Filiale schließen',C.RED,C.WHITE,FONTS.sm);
   btnClose.enabled=game.selectedBranch>=0;
   btnNew.draw(); btnClose.draw();
-  if(btnNew.update()){game.newBranchState={phase:'name',name:'',city:'',country:'Deutschland',locType:'kleinststadt'};}
+  if(btnNew.update()){game.newBranchState={phase:'name',name:'',city:'',country:'Deutschland',locType:'kleinststadt'};activateMobileInput('');}
   if(btnClose.update()&&game.selectedBranch>=0){
     const b=gs.branches[game.selectedBranch];
     game.modal={title:'Filiale schließen?',msg:`Möchtest du '${b.name}' wirklich schließen?`,
@@ -1275,7 +1347,7 @@ function drawBranchStaff(branch) {
   }
 
   // ─── SPA-TAG BUTTON ───
-  ry+=18;
+  ry+=6;
   const spaOnCooldown=branch.spa_cooldown>0;
   const spaHasStaff=branch.staff.length>0;
   const spaCanUse=spaHasStaff&&!spaOnCooldown;
@@ -1386,8 +1458,8 @@ function drawNewBranchDialog() {
     fillRect(bx+30,by+120,bw-60,44,C.BG2,C.GOLD,1,6);
     drawText(ns.name+cursor,FONTS.md,C.WHITE,bx+40,by+130,'left','top');
     drawText('ENTER zum Bestätigen',FONTS.xs,C.GRAY,W/2,by+185,'center','top');
-    if(keyPressed==='Enter'&&ns.name.trim()){ns.phase='city';consumeKey();}
-    else if(keyPressed==='Escape'){game.newBranchState=null;consumeKey();}
+    if(keyPressed==='Enter'&&ns.name.trim()){ns.phase='city';activateMobileInput('');consumeKey();}
+    else if(keyPressed==='Escape'){game.newBranchState=null;deactivateMobileInput();consumeKey();}
     else if(keyPressed==='Backspace'){ns.name=ns.name.slice(0,-1);consumeKey();}
     else if(charTyped&&ns.name.length<30){ns.name+=charTyped;consumeKey();}
   } else if(ns.phase==='city'){
@@ -1396,8 +1468,8 @@ function drawNewBranchDialog() {
     fillRect(bx+30,by+150,bw-60,44,C.BG2,C.GOLD,1,6);
     drawText(ns.city+cursor,FONTS.md,C.WHITE,bx+40,by+160,'left','top');
     drawText('ENTER zum Bestätigen',FONTS.xs,C.GRAY,W/2,by+215,'center','top');
-    if(keyPressed==='Enter'&&ns.city.trim()){ns.phase='country';consumeKey();}
-    else if(keyPressed==='Escape'){game.newBranchState=null;consumeKey();}
+    if(keyPressed==='Enter'&&ns.city.trim()){ns.phase='country';activateMobileInput(ns.country);consumeKey();}
+    else if(keyPressed==='Escape'){game.newBranchState=null;deactivateMobileInput();consumeKey();}
     else if(keyPressed==='Backspace'){ns.city=ns.city.slice(0,-1);consumeKey();}
     else if(charTyped&&ns.city.length<30){ns.city+=charTyped;consumeKey();}
   } else if(ns.phase==='country'){
@@ -1406,8 +1478,8 @@ function drawNewBranchDialog() {
     fillRect(bx+30,by+150,bw-60,44,C.BG2,C.GOLD,1,6);
     drawText(ns.country+cursor,FONTS.md,C.WHITE,bx+40,by+160,'left','top');
     drawText('ENTER (Standard: Deutschland)',FONTS.xs,C.GRAY,W/2,by+215,'center','top');
-    if(keyPressed==='Enter'){ns.phase='type';consumeKey();}
-    else if(keyPressed==='Escape'){game.newBranchState=null;consumeKey();}
+    if(keyPressed==='Enter'){ns.phase='type';deactivateMobileInput();consumeKey();}
+    else if(keyPressed==='Escape'){game.newBranchState=null;deactivateMobileInput();consumeKey();}
     else if(keyPressed==='Backspace'){ns.country=ns.country.slice(0,-1);consumeKey();}
     else if(charTyped&&ns.country.length<40){ns.country+=charTyped;consumeKey();}
   } else if(ns.phase==='type'){
@@ -1424,12 +1496,12 @@ function drawNewBranchDialog() {
       if(!canAfford) drawText('Nicht genug Geld!',FONTS.xxs,C.RED,r.x+r.w-12,r.y+r.h/2,'right','middle');
       if(mouse.clicked&&mouse.x>=r.x&&mouse.x<=r.x+r.w&&mouse.y>=r.y&&mouse.y<=r.y+r.h){
         consumeClick();
-        if(canAfford){gs.openBranch(ns.name,lt,ns.city,ns.country);game.newBranchState=null;}
+        if(canAfford){gs.openBranch(ns.name,lt,ns.city,ns.country);game.newBranchState=null;deactivateMobileInput();}
         else gs.addNotif(`Zu wenig Geld! Benötigt:${cost.toFixed(0)}€`,'danger');
       }
       li++;
     }
-    if(keyPressed==='Escape'){game.newBranchState=null;consumeKey();}
+    if(keyPressed==='Escape'){game.newBranchState=null;deactivateMobileInput();consumeKey();}
   }
 }
 
