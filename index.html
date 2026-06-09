@@ -105,15 +105,19 @@ function getTouchPos(t) {
   };
 }
 
+let _isPinching = false;
+
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   if (e.touches.length === 1) {
+    _isPinching = false;
     const p = getTouchPos(e.touches[0]);
     mouse.x = p.x; mouse.y = p.y;
     mouse.down = true;
   }
-  // iOS pinch start
-  if (isIOS && e.touches.length === 2) {
+  if (e.touches.length === 2) {
+    _isPinching = true;
+    mouse.down = false;
     _pinchStartDist = _pinchDist(e.touches);
     _pinchBaseScale = _pinchCurrentScale;
   }
@@ -121,20 +125,26 @@ canvas.addEventListener('touchstart', e => {
 
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
-  if (e.changedTouches.length) {
-    const p = getTouchPos(e.changedTouches[0]);
-    mouse.x = p.x; mouse.y = p.y;
+  if (e.touches.length === 0) {
+    // All fingers lifted
+    if (!_isPinching && e.changedTouches.length) {
+      const p = getTouchPos(e.changedTouches[0]);
+      mouse.x = p.x; mouse.y = p.y;
+      mouse.clicked = true;
+    }
+    _isPinching = false;
+    mouse.down = false;
+    mouse.released = true;
+  } else if (e.touches.length === 1) {
+    // One finger still down after pinch — don't fire click
+    _isPinching = false;
   }
-  mouse.down = false;
-  mouse.released = true;
-  if (e.touches.length === 0) mouse.clicked = true; // only fire click when all fingers lifted
 
   // iOS keyboard: focus must happen synchronously here
   if (isIOS) {
     if (mobileInputActive) {
       mobileInput.focus();
     } else {
-      // Speculative focus for iOS — blur after 300ms if no dialog opened
       mobileInput.style.pointerEvents = 'auto';
       mobileInput.focus();
       setTimeout(() => { if (!mobileInputActive) { mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; } }, 300);
@@ -144,14 +154,13 @@ canvas.addEventListener('touchend', e => {
 
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
-  if (e.touches.length === 1) {
-    const p = getTouchPos(e.touches[0]);
-    mouse.x = p.x; mouse.y = p.y;
-  }
-  // iOS pinch zoom
-  if (isIOS && e.touches.length === 2) {
+  if (e.touches.length === 2) {
+    _isPinching = true;
     const dist = _pinchDist(e.touches);
     applyZoom(_pinchBaseScale * (dist / _pinchStartDist));
+  } else if (e.touches.length === 1 && !_isPinching) {
+    const p = getTouchPos(e.touches[0]);
+    mouse.x = p.x; mouse.y = p.y;
   }
 }, {passive: false});
 
