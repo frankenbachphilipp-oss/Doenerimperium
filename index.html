@@ -66,14 +66,14 @@ document.body.appendChild(mobileInput);
 let mobileInputActive = false;
 let mobileInputLastLen = 0;
 
+const MOBILE_SENTINEL = '\u200B'; // zero-width space as base value
+
 function activateMobileInput(initialValue) {
   if (!isMobile) return;
   mobileInputActive = true;
-  mobileInput.value = initialValue || '';
-  mobileInputLastLen = mobileInput.value.length;
+  mobileInput.value = MOBILE_SENTINEL;
+  mobileInputLastLen = MOBILE_SENTINEL.length;
   mobileInput.style.pointerEvents = 'auto';
-  // On iOS the focus was already called in the touchend handler.
-  // On Android we call focus() here directly (works fine outside gesture).
   if (!isIOS) mobileInput.focus();
 }
 function deactivateMobileInput() {
@@ -84,15 +84,19 @@ function deactivateMobileInput() {
 }
 
 mobileInput.addEventListener('input', () => {
-  if (!mobileInputActive) { mobileInput.value = ''; mobileInputLastLen = 0; return; }
+  if (!mobileInputActive) { mobileInput.value = MOBILE_SENTINEL; mobileInputLastLen = MOBILE_SENTINEL.length; return; }
   const val = mobileInput.value;
   const newLen = val.length;
   if (newLen > mobileInputLastLen) {
-    charTyped += val.slice(mobileInputLastLen);
+    // Get only the newly typed characters, strip sentinel
+    const added = val.replace(MOBILE_SENTINEL, '').slice(mobileInputLastLen - MOBILE_SENTINEL.length);
+    charTyped += added;
   } else if (newLen < mobileInputLastLen) {
     keyPressed = 'Backspace';
   }
-  mobileInputLastLen = newLen;
+  // Reset to sentinel so next keystroke always gives a clean delta
+  mobileInput.value = MOBILE_SENTINEL;
+  mobileInputLastLen = MOBILE_SENTINEL.length;
 });
 mobileInput.addEventListener('keydown', e => {
   if (!mobileInputActive) return;
