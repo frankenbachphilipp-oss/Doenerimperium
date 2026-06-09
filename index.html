@@ -29,13 +29,9 @@ canvas.width = W; canvas.height = H;
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   || (navigator.maxTouchPoints > 1 && !/Win/.test(navigator.platform));
 const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+const isAndroid = /Android/i.test(navigator.userAgent);
 
 // ─── HIDDEN INPUT FOR MOBILE KEYBOARD ───
-// iOS RULE: .focus() only works synchronously inside a user-gesture handler.
-// Strategy: on iOS we keep a textarea always focused. It's invisible but
-// font-size:16px stops Safari from zooming. We never blur it unless we want
-// the keyboard gone. activateMobileInput/deactivateMobileInput control whether
-// keystrokes feed into the game.
 const mobileInput = document.createElement('textarea');
 mobileInput.setAttribute('autocomplete', 'off');
 mobileInput.setAttribute('autocorrect', 'off');
@@ -44,11 +40,11 @@ mobileInput.setAttribute('spellcheck', 'false');
 mobileInput.setAttribute('enterkeyhint', 'done');
 mobileInput.style.cssText = [
   'position:fixed',
-  'bottom:0',         // bottom avoids iOS scroll-to-visible
+  'bottom:0',
   'left:0',
-  'width:100%',       // full width so iOS sees it as a real field
+  'width:100%',
   'height:3px',
-  'font-size:16px',   // CRITICAL: prevents iOS auto-zoom
+  'font-size:16px',
   'opacity:0',
   'border:none',
   'outline:none',
@@ -64,17 +60,16 @@ mobileInput.style.cssText = [
 document.body.appendChild(mobileInput);
 
 let mobileInputActive = false;
-let mobileInputLastLen = 0;
+const MOBILE_SENTINEL = '\u200B';
 
-const MOBILE_SENTINEL = '\u200B'; // zero-width space as base value
-
-function activateMobileInput(initialValue) {
+function activateMobileInput() {
   if (!isMobile) return;
   mobileInputActive = true;
   mobileInput.value = MOBILE_SENTINEL;
-  mobileInputLastLen = MOBILE_SENTINEL.length;
   mobileInput.style.pointerEvents = 'auto';
-  if (!isIOS) mobileInput.focus();
+  // Android: focus() works fine outside gesture handler
+  if (isAndroid) mobileInput.focus();
+  // iOS: focus was already called in touchend handler
 }
 function deactivateMobileInput() {
   if (!isMobile) return;
@@ -84,84 +79,83 @@ function deactivateMobileInput() {
 }
 
 mobileInput.addEventListener('input', () => {
-  if (!mobileInputActive) { mobileInput.value = MOBILE_SENTINEL; mobileInputLastLen = MOBILE_SENTINEL.length; return; }
+  if (!mobileInputActive) { mobileInput.value = MOBILE_SENTINEL; return; }
   const val = mobileInput.value;
-  const newLen = val.length;
-  if (newLen > mobileInputLastLen) {
-    // Get only the newly typed characters, strip sentinel
-    const added = val.replace(MOBILE_SENTINEL, '').slice(mobileInputLastLen - MOBILE_SENTINEL.length);
-    charTyped += added;
-  } else if (newLen < mobileInputLastLen) {
+  // anything longer than sentinel = new character(s)
+  if (val.length > 1) {
+    charTyped += val.replace(MOBILE_SENTINEL, '');
+  } else if (val.length === 0) {
     keyPressed = 'Backspace';
   }
-  // Reset to sentinel so next keystroke always gives a clean delta
   mobileInput.value = MOBILE_SENTINEL;
-  mobileInputLastLen = MOBILE_SENTINEL.length;
 });
 mobileInput.addEventListener('keydown', e => {
   if (!mobileInputActive) return;
-  keys[e.key] = true;
   if (e.key === 'Enter' || e.key === 'Go') { keyPressed = 'Enter'; e.preventDefault(); }
   if (e.key === 'Escape') keyPressed = 'Escape';
+  if (e.key === 'Backspace') { keyPressed = 'Backspace'; }
 });
-mobileInput.addEventListener('keyup', e => { keys[e.key] = false; });
 
-// Touch: set coordinates on touchstart, fire click + focus on touchend
+// ─── TOUCH EVENTS ───
+function getTouchPos(t) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (t.clientX - r.left) * (W / r.width),
+    y: (t.clientY - r.top)  * (H / r.height),
+  };
+}
+
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
-  const t = e.touches[0];
-  const r = canvas.getBoundingClientRect();
-  mouse.x = (t.clientX - r.left) * (W / r.width);
-  mouse.y = (t.clientY - r.top) * (H / r.height);
-  mouse.down = true;
+  if (e.touches.length === 1) {
+    const p = getTouchPos(e.touches[0]);
+    mouse.x = p.x; mouse.y = p.y;
+    mouse.down = true;
+  }
+  // iOS pinch start
+  if (isIOS && e.touches.length === 2) {
+    _pinchStartDist = _pinchDist(e.touches);
+    _pinchBaseScale = _pinchCurrentScale;
+  }
 }, {passive: false});
 
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
   if (e.changedTouches.length) {
-    const t = e.changedTouches[0];
-    const r = canvas.getBoundingClientRect();
-    mouse.x = (t.clientX - r.left) * (W / r.width);
-    mouse.y = (t.clientY - r.top) * (H / r.height);
+    const p = getTouchPos(e.changedTouches[0]);
+    mouse.x = p.x; mouse.y = p.y;
   }
   mouse.down = false;
   mouse.released = true;
-  mouse.clicked = true;
-  // iOS: focus must happen synchronously in this handler.
-  // We check if a text dialog is open OR will open from this tap.
-  // If a dialog is already open, keep keyboard visible.
-  // If we're on main menu and tapped in the "Neues Spiel" button area,
-  // or on the branch screen and tapped "Neue Filiale", focus immediately.
-  if (mobileInputActive) {
-    mobileInput.focus();
-  } else {
-    // Speculatively focus — the game loop will set mobileInputActive if needed.
-    // This puts us in the iOS-trusted gesture window.
-    mobileInput.style.pointerEvents = 'auto';
-    mobileInput.focus();
-    // If the game loop doesn't activate it within 300ms, blur again.
-    setTimeout(() => { if (!mobileInputActive) { mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; } }, 300);
+  if (e.touches.length === 0) mouse.clicked = true; // only fire click when all fingers lifted
+
+  // iOS keyboard: focus must happen synchronously here
+  if (isIOS) {
+    if (mobileInputActive) {
+      mobileInput.focus();
+    } else {
+      // Speculative focus for iOS — blur after 300ms if no dialog opened
+      mobileInput.style.pointerEvents = 'auto';
+      mobileInput.focus();
+      setTimeout(() => { if (!mobileInputActive) { mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; } }, 300);
+    }
   }
 }, {passive: false});
 
 canvas.addEventListener('touchmove', e => {
-  if (e.touches.length !== 1) return; // pinch handled separately
   e.preventDefault();
-  const t = e.touches[0];
-  const r = canvas.getBoundingClientRect();
-  mouse.x = (t.clientX - r.left) * (W / r.width);
-  mouse.y = (t.clientY - r.top) * (H / r.height);
+  if (e.touches.length === 1) {
+    const p = getTouchPos(e.touches[0]);
+    mouse.x = p.x; mouse.y = p.y;
+  }
+  // iOS pinch zoom
+  if (isIOS && e.touches.length === 2) {
+    const dist = _pinchDist(e.touches);
+    applyZoom(_pinchBaseScale * (dist / _pinchStartDist));
+  }
 }, {passive: false});
 
-function resizeCanvas() {
-  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
-  canvas.style.width = s * W + 'px';
-  canvas.style.height = s * H + 'px';
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-// ─── PINCH TO ZOOM (iOS) ───
+// ─── PINCH TO ZOOM (iOS only) ───
 let _pinchBaseScale = 1;
 let _pinchCurrentScale = 1;
 let _pinchStartDist = 0;
@@ -177,25 +171,18 @@ function applyZoom(scale) {
   _pinchCurrentScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale));
   const base = Math.min(window.innerWidth / W, window.innerHeight / H);
   const s = base * _pinchCurrentScale;
-  canvas.style.width = s * W + 'px';
+  canvas.style.width  = s * W + 'px';
   canvas.style.height = s * H + 'px';
-  canvas.style.transformOrigin = '50% 50%';
 }
 
-canvas.addEventListener('touchstart', e => {
-  if (e.touches.length === 2) {
-    _pinchStartDist = _pinchDist(e.touches);
-    _pinchBaseScale = _pinchCurrentScale;
-  }
-}, {passive: true, capture: true});
-
-canvas.addEventListener('touchmove', e => {
-  if (e.touches.length === 2) {
-    e.preventDefault();
-    const dist = _pinchDist(e.touches);
-    applyZoom(_pinchBaseScale * (dist / _pinchStartDist));
-  }
-}, {passive: false, capture: true});
+function resizeCanvas() {
+  const base = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const s = base * _pinchCurrentScale;
+  canvas.style.width  = s * W + 'px';
+  canvas.style.height = s * H + 'px';
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
 // ─── COLORS ───
 const C = {
