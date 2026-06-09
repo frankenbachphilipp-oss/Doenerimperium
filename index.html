@@ -186,11 +186,12 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', e => { if(e.button===0){mouse.down=true;mouse.clicked=true;} });
 canvas.addEventListener('mouseup',   e => { if(e.button===0){mouse.down=false;mouse.released=true;} });
 document.addEventListener('keydown', e => {
+  if(mobileInputActive) return; // mobile input handles this itself
   keys[e.key] = true; keyPressed = e.key;
   if(e.key.length === 1) charTyped += e.key;
   if(['Backspace','Enter','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
 });
-document.addEventListener('keyup', e => { keys[e.key] = false; });
+document.addEventListener('keyup', e => { if(mobileInputActive) return; keys[e.key] = false; });
 canvas.setAttribute('tabindex','0'); canvas.focus();
 
 function consumeClick() { mouse.clicked = false; }
