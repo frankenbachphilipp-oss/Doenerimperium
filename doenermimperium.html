@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DÖNERIMPERIUM™</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0806; display: flex; justify-content: center; align-items: center;
+  min-height: 100vh; overflow: hidden; }
+canvas { display: block; image-rendering: crisp-edges; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════
+//  DÖNERIMPERIUM™  –  Single-File HTML5 Port
+//  Vollständige Konvertierung von Pygame zu Canvas
+// ═══════════════════════════════════════════════════════
+
+const W = 1280, H = 720;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+
+function resizeCanvas() {
+  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = s * W + 'px';
+  canvas.style.height = s * H + 'px';
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// ─── COLORS ───
+const C = {
+  BG:'#120e0a',BG2:'#1c1610',PANEL:'#231c14',PANEL2:'#2d2419',
+  BORDER:'#5a462d',BORDER2:'#785f3c',
+  GOLD:'#dcaf3c',GOLD2:'#ffd250',RED:'#d23c37',RED2:'#f05046',
+  GREEN:'#50b450',GREEN2:'#64dc64',BLUE:'#3c82c8',BLUE2:'#50a0f0',
+  WHITE:'#f0e6d7',GRAY:'#8c7d69',GRAY2:'#5a5041',
+  ORANGE:'#dc8228',ORANGE2:'#ffa03c',PURPLE:'#9650c8',TEAL:'#32aa9b',
+  DARK_RED:'#8c1e19',TEXT:'#f0e6d7',TEXT2:'#b9aa91',TEXT3:'#786e5a',
+  ACCENT:'#e6b432',SUCCESS:'#46c86e',WARN:'#e6a528',DANGER:'#d23737',INFO:'#3ca5e6',
+};
+const FONT_BASE = "Georgia, 'Palatino Linotype', Palatino, serif";
+function F(sz, bold=false) { return `${bold?'bold ':' '}${sz}px ${FONT_BASE}`; }
+const FONTS = { xxs:F(13), xs:F(15), sm:F(19), md:F(24), lg:F(33,true), title:F(60,true),
+                xxsB:F(13,true), smB:F(19,true) };
+
+// ─── INPUT ───
+const mouse = { x:0, y:0, down:false, clicked:false, released:false };
+const keys = {};
+let keyPressed = null;
+let charTyped = '';
+
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect();
+  mouse.x = (e.clientX - r.left) * (W / r.width);
+  mouse.y = (e.clientY - r.top) * (H / r.height);
+});
+canvas.addEventListener('mousedown', e => { if(e.button===0){mouse.down=true;mouse.clicked=true;} });
+canvas.addEventListener('mouseup',   e => { if(e.button===0){mouse.down=false;mouse.released=true;} });
+document.addEventListener('keydown', e => {
+  keys[e.key] = true; keyPressed = e.key;
+  if(e.key.length === 1) charTyped += e.key;
+  if(['Backspace','Enter','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+canvas.setAttribute('tabindex','0'); canvas.focus();
+
+function consumeClick() { mouse.clicked = false; }
+function consumeKey()   { keyPressed = null; charTyped = ''; }
+
+// ─── DRAWING UTILS ───
+function fillRect(x,y,w,h,fill,stroke,sw=1,r=0){
+  ctx.beginPath();
+  if(r>0) ctx.roundRect(x,y,w,h,r); else ctx.rect(x,y,w,h);
+  ctx.fillStyle=fill; ctx.fill();
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=sw;ctx.stroke();}
+}
+function strokeRect(x,y,w,h,stroke,sw=1,r=0){
+  ctx.beginPath();
+  if(r>0) ctx.roundRect(x,y,w,h,r); else ctx.rect(x,y,w,h);
+  ctx.strokeStyle=stroke; ctx.lineWidth=sw; ctx.stroke();
+}
+function fillCirc(x,y,r,fill){ ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill(); }
+function strokeLine(x1,y1,x2,y2,col,w=1){ ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=col;ctx.lineWidth=w;ctx.stroke(); }
+
+function drawText(text, font, color, x, y, align='left', baseline='top', maxW=0) {
+  if (!text && text !== 0) return;
+  ctx.font = font; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = baseline;
+  if (maxW > 0) {
+    const words = String(text).split(' ');
+    let line = '', lines = [];
+    for (const w of words) {
+      const test = line ? line+' '+w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+      else line = test;
+    }
+    if(line) lines.push(line);
+    const lh = parseInt(font) * 1.3;
+    for (let i=0; i<lines.length; i++) ctx.fillText(lines[i], x, y + i*lh);
+    return;
+  }
+  ctx.fillText(String(text), x, y);
+}
+
+function drawBar(x, y, w, h, val, max, fg, bg=C.PANEL2, showPct=true) {
+  const pct = Math.max(0, Math.min(1, max > 0 ? val/max : 0));
+  fillRect(x,y,w,h,bg,'#00000000',0,3);
+  if(pct > 0) fillRect(x,y,Math.round(w*pct),h,fg,'#00000000',0,3);
+  strokeRect(x,y,w,h,C.BORDER,1,3);
+  if(showPct) { ctx.font=FONTS.xxs; ctx.fillStyle=C.WHITE; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(Math.round(pct*100)+'%',x+w/2,y+h/2); }
+}
+
+function gradientRect(x,y,w,h,c1,c2) {
+  const g = ctx.createLinearGradient(x,y,x,y+h);
+  g.addColorStop(0,c1); g.addColorStop(1,c2);
+  ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+function lerpColor(a,b,t) {
+  const [ar,ag,ab]=hexToRgb(a), [br,bg,bb]=hexToRgb(b);
+  return `rgb(${Math.round(ar+(br-ar)*t)},${Math.round(ag+(bg-ag)*t)},${Math.round(ab+(bb-ab)*t)})`;
+}
+function moneyColor(v) { return v>=0 ? C.GREEN2 : C.RED2; }
+function typeColor(t) { return {success:C.SUCCESS,warn:C.WARN,danger:C.DANGER,info:C.INFO,positive:C.GREEN,negative:C.RED}[t]||C.INFO; }
+function formatMoney(v) {
+  const a=Math.abs(v);
+  if(a>=1e9) return (v/1e9).toFixed(2)+'Mrd€';
+  if(a>=1e6) return (v/1e6).toFixed(2)+'Mio€';
+  if(a>=1e3) return (v/1e3).toFixed(1)+'K€';
+  return v.toFixed(2)+'€';
+}
+function miniChart(data, x,y,w,h, col) {
+  fillRect(x,y,w,h,C.PANEL2,C.BORDER,1,4);
+  const d = data.filter(v=>v>0);
+  if(!d.length) { drawText('Keine Daten',FONTS.xxs,C.GRAY,x+w/2,y+h/2,'center','middle'); return; }
+  const mn=Math.min(...data), mx=Math.max(...data), rng=mx-mn||1;
+  const pts=data.map((v,i)=>[x+4+i/(data.length-1)*(w-8), y+h-4-(v-mn)/rng*(h-12)]);
+  // fill
+  ctx.beginPath(); ctx.moveTo(pts[0][0],y+h-4);
+  pts.forEach(p=>ctx.lineTo(p[0],p[1]));
+  ctx.lineTo(pts[pts.length-1][0],y+h-4); ctx.closePath();
+  const [r,g,b]=hexToRgb(col); ctx.fillStyle=`rgba(${r},${g},${b},0.2)`; ctx.fill();
+  // line
+  ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+  pts.forEach(p=>ctx.lineTo(p[0],p[1]));
+  ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
+  if(data.length) drawText(formatMoney(data[data.length-1]),FONTS.xxs,col,x+w-4,y+4,'right','top');
+}
+
+function doenerIcon(cx,cy,size,anim) {
+  const wobble=Math.sin(anim*3)*2;
+  // spit
+  strokeLine(cx,cy-size,cx,cy+size,'#8c8070',3);
+  const layers=[[180,80,50],[200,100,60],[170,70,40],[190,90,55],[160,65,35]];
+  for(let i=0;i<layers.length;i++){
+    const [r,g,b]=layers[i];
+    const off=Math.sin(anim*2+i)*wobble;
+    const ly=cy-size+size/3+i*(size*2/layers.length);
+    const lw=size+Math.sin(i*0.8)*size/3;
+    const lh=size/4;
+    ctx.beginPath(); ctx.ellipse(cx+off,ly,lw/2,lh/2,0,0,Math.PI*2);
+    ctx.fillStyle=`rgb(${r},${g},${b})`; ctx.fill();
+  }
+  fillCirc(cx,cy-size,size/6,C.GOLD);
+}
+
+// ─── BUTTON ───
+class Button {
+  constructor(x,y,w,h,label,bg=C.GOLD,fg=C.BG,font=null) {
+    this.x=x;this.y=y;this.w=w;this.h=h;this.label=label;
+    this.bg=bg;this.fg=fg;this.font=font||FONTS.sm;
+    this.enabled=true;this.hovered=false;this._pressed=false;
+  }
+  contains(px,py){ return px>=this.x&&px<=this.x+this.w&&py>=this.y&&py<=this.y+this.h; }
+  update() {
+    if(!this.enabled){ this.hovered=false; return false; }
+    this.hovered=this.contains(mouse.x,mouse.y);
+    if(this.hovered && mouse.clicked){ mouse.clicked=false; return true; }
+    return false;
+  }
+  draw() {
+    const bg = !this.enabled ? C.GRAY2 : this.hovered ? lerpColor(this.bg,C.WHITE,0.2) : this.bg;
+    const fg = !this.enabled ? C.GRAY : this.fg;
+    fillRect(this.x,this.y,this.w,this.h,bg,null,0,6);
+    // highlight
+    ctx.fillStyle='rgba(255,255,255,0.07)';
+    fillRect(this.x+2,this.y+2,this.w-4,this.h/2-2,'rgba(255,255,255,0.07)',null,0,4);
+    drawText(this.label,this.font,fg,this.x+this.w/2,this.y+this.h/2,'center','middle');
+  }
+}
+
+// ─── NOTIFICATION TOASTS ───
+const toasts = [];
+function addToast(msg,type='info') {
+  if(toasts.length>=5) toasts.shift();
+  if(toasts.length && toasts[toasts.length-1].msg===msg) return;
+  toasts.push({msg,type,age:0,dur:4+msg.length*0.04});
+}
+function tickToasts(dt) { for(let i=toasts.length-1;i>=0;i--){ toasts[i].age+=dt; if(toasts[i].age>=toasts[i].dur) toasts.splice(i,1); } }
+function drawToasts() {
+  let y=H-20;
+  for(let i=toasts.length-1;i>=0;i--){
+    const t=toasts[i];
+    let alpha=1;
+    if(t.age<0.3) alpha=t.age/0.3;
+    else if(t.age>t.dur-0.5) alpha=(t.dur-t.age)/0.5;
+    alpha=Math.max(0,Math.min(1,alpha));
+    const col=typeColor(t.type);
+    ctx.font=FONTS.sm; ctx.textAlign='left';
+    const tw=ctx.measureText(t.msg).width;
+    const bw=Math.min(tw+24,600), bh=28;
+    const bx=W-bw-20; y-=bh+8;
+    ctx.globalAlpha=alpha;
+    fillRect(bx,y,bw,bh,lerpColor(C.PANEL,col,0.15),col,1,6);
+    fillRect(bx,y,4,bh,col,null,0,3);
+    drawText(t.msg.length>75?t.msg.slice(0,72)+'...':t.msg,FONTS.sm,C.WHITE,bx+14,y+4,'left','top');
+    ctx.globalAlpha=1;
+  }
+}
+
+// ─── GAME DATA / CONSTANTS ───
+const STARTING_MONEY = 15000;
+const TICK_RATE = 1.0;
+const TICKS_PER_HOUR = 6;
+
+const LOCATION_TYPES = {
+  kleinststadt: {rent:800,  foot_traffic:200, label:'🏘 Kleinstadt',      unlock:0},
+  grossstadt:   {rent:2500, foot_traffic:500, label:'🏙 Großstadt',       unlock:3},
+  bahnhof:      {rent:3500, foot_traffic:800, label:'🚂 Bahnhof',         unlock:5},
+  einkaufszentrum:{rent:4500,foot_traffic:1100,label:'🛍 Einkaufszentrum',unlock:8},
+  flughafen:    {rent:8000, foot_traffic:1600,label:'✈ Flughafen',       unlock:15},
+};
+
+const CUSTOMER_RATES = {
+  schueler:    {peak:[11,12,13],        rate:8,  budget:[2.5,4.5],  patience:[30,60],  loyalty:0.3},
+  student:     {peak:[12,13,19,20],     rate:6,  budget:[3.0,6.0],  patience:[40,80],  loyalty:0.4},
+  bueroangest: {peak:[12,13],           rate:10, budget:[5.0,9.0],  patience:[20,40],  loyalty:0.6},
+  handwerker:  {peak:[11,12,13,17],     rate:7,  budget:[4.0,8.0],  patience:[35,70],  loyalty:0.5},
+  familie:     {peak:[12,13,18,19],     rate:5,  budget:[8.0,20.0], patience:[50,90],  loyalty:0.7},
+  tourist:     {peak:[11,12,13,14,15],  rate:4,  budget:[6.0,15.0], patience:[60,120], loyalty:0.2},
+  stammkunde:  {peak:[12,13,18,19],     rate:9,  budget:[4.0,8.0],  patience:[60,120], loyalty:0.9},
+};
+
+const INGREDIENT_COSTS = {
+  fleisch_basis:1.20, fleisch_premium:2.50, brot_normal:0.25, brot_vollkorn:0.40, brot_wrap:0.30,
+  salat:0.15, tomate:0.20, zwiebel:0.10, kraut:0.12, gurke:0.15,
+  sosse_knoblauch:0.08, sosse_scharf:0.08, sosse_kraeuterkaese:0.12, sosse_joghurt:0.10, sosse_tomaten:0.09
+};
+const SAUCE_NAMES = {sosse_knoblauch:'Knoblauch',sosse_scharf:'Scharf',sosse_kraeuterkaese:'Kräuterquark',sosse_joghurt:'Joghurt',sosse_tomaten:'Tomate'};
+
+const HUMOR_MESSAGES = [
+  ['info','Ein Kunde behauptet, früher seien die Döner größer gewesen.'],
+  ['warn','Knoblauchsoße verursacht erneut Lieferprobleme beim Fahrer.'],
+  ['success','Wallah bester Döner! Umsatz +15%!'],
+  ['info','Ein Stammkunde fragt: \"Machst du auch Döner ohne Döner?\"'],
+  ['warn','Mitarbeiter Mehmet tanzt statt Döner zu schneiden.'],
+  ['success','Influencer postet: \"Das ist kein Döner, das ist KUNST!\" +200 Kunden!'],
+  ['info','Ein Veganer möchte \"Gemüse-Döner\" ohne Gemüse, nur Soße.'],
+  ['warn','Zwiebeln fehlen! Notfalllieferung wurde bestellt.'],
+  ['success','Lokale Zeitung: \"Beste Pommes in der Stadt\" – Ihr verkauft keinen.'],
+  ['warn','Das Schild \"FRISCH\" leuchtet nicht mehr. Kunden misstrauisch.'],
+  ['success','Busladung Touristen aus Japan fotografiert jeden Döner!'],
+  ['info','Kundenbewertung: \"5 Sterne, weil ich nicht weiter zählen konnte.\"'],
+  ['warn','Jemand hat versucht, mit Döner zu bezahlen. Abgelehnt.'],
+  ['success','TikTok-Video viral: Das ASMR des Dönerschneidens! +500 Kunden!'],
+  ['danger','Gesundheitsamt kündigt Inspektion an! Schnell aufräumen!'],
+  ['success','Fußballspiel vorbei – Ansturm von 80 Hungrigen!'],
+  ['warn','Schärfste Soße wurde versehentlich als Kinderspeise serviert.'],
+  ['info','Wissenschaftler untersuchen: Warum ist Döner nachts besser?'],
+  ['success','Sternekoch besucht dein Lokal: \"Interessant... sehr interessant.\"'],
+  ['warn','Strom fällt aus! Alle Grills offline für 2 Stunden.'],
+];
+
+const RANDOM_EVENTS = [
+  {id:'tiktok_viral',name:'TikTok-Virus!',desc:'Ein Video von deinem Döner geht viral!',effect:{reputation:15,daily_customers:1.5},duration:7,prob:0.002,type:'positive'},
+  {id:'lebensmittelkontrolle',name:'Lebensmittelkontrolle!',desc:'Das Gesundheitsamt steht vor der Tür!',effect:{hygiene_check:true},duration:1,prob:0.003,type:'negative'},
+  {id:'fussball_ansturm',name:'Fußballspiel!',desc:'Massenhaft hungrige Fans!',effect:{daily_customers:2.0},duration:1,prob:0.005,type:'positive'},
+  {id:'konkurrenz_eroeffnet',name:'Neue Konkurrenz!',desc:'Ein neuer Dönerladen eröffnet genau gegenüber!',effect:{daily_customers:0.8,reputation:-5},duration:30,prob:0.002,type:'negative'},
+  {id:'stromausfall',name:'Stromausfall!',desc:'Kein Strom – alle Grills aus!',effect:{capacity_mod:0.2},duration:1,prob:0.004,type:'negative'},
+  {id:'gute_bewertung',name:'Tripadvisor-Boom!',desc:'100 Fünf-Sterne-Bewertungen über Nacht!',effect:{reputation:10,daily_customers:1.3},duration:14,prob:0.003,type:'positive'},
+  {id:'prominenter_besuch',name:'Promi-Besuch!',desc:'Ein bekannter Politiker genießt deinen Döner!',effect:{reputation:20,daily_customers:1.4},duration:7,prob:0.001,type:'positive'},
+];
+
+const COMPETITOR_TYPES = [
+  {name:'Billig-Döner Baris',quality:3,price_mod:0.7,color:'#d23c37'},
+  {name:'Premium Kebab Palace',quality:9,price_mod:1.6,color:'#dcaf3c'},
+  {name:'McBurger Fusion',quality:5,price_mod:1.0,color:'#dc8228'},
+  {name:'Geheimtipp Dönerbude',quality:8,price_mod:0.9,color:'#50b450'},
+];
+
+// ─── RECIPE ───
+class Recipe {
+  constructor() {
+    this.name='Classic Döner'; this.fleisch='fleisch_basis'; this.brot='brot_normal';
+    this.salat=true; this.tomate=true; this.zwiebel=true; this.kraut=true; this.gurke=true;
+    this.sosse='sosse_knoblauch'; this.schaerfe=2; this.fleisch_menge=1.0; this.price=5.50;
+  }
+  ingredientCost() {
+    let c = (INGREDIENT_COSTS[this.fleisch]||1.2)*this.fleisch_menge + (INGREDIENT_COSTS[this.brot]||0.25);
+    if(this.salat) c+=INGREDIENT_COSTS.salat; if(this.tomate) c+=INGREDIENT_COSTS.tomate;
+    if(this.zwiebel) c+=INGREDIENT_COSTS.zwiebel; if(this.kraut) c+=INGREDIENT_COSTS.kraut;
+    if(this.gurke) c+=INGREDIENT_COSTS.gurke; c+=INGREDIENT_COSTS[this.sosse]||0.08;
+    return c;
+  }
+  qualityScore() {
+    let q=5.0;
+    if(this.fleisch==='fleisch_premium') q+=2.0;
+    if(this.brot==='brot_vollkorn') q+=0.5;
+    if(this.salat) q+=0.3; if(this.tomate) q+=0.3; if(this.gurke) q+=0.2;
+    q+=this.fleisch_menge*0.5;
+    return Math.min(10,q);
+  }
+  profitMargin() { return this.price - this.ingredientCost(); }
+  toObj() { return {...this}; }
+  static fromObj(o) { const r=new Recipe(); Object.assign(r,o); return r; }
+}
+
+// ─── STAFF ───
+const STAFF_TYPES = {
+  doenemrister: {label:'Dönermeister',speed:7,friendliness:5,exp:8,reliability:7,salary:1800,color:C.ORANGE},
+  kassengenie:  {label:'Kassengenie', speed:6,friendliness:8,exp:5,reliability:8,salary:1600,color:C.GREEN},
+  sauce_guru:   {label:'Sauce-Guru',  speed:5,friendliness:7,exp:6,reliability:6,salary:1700,color:C.RED},
+  azubi:        {label:'Azubi',       speed:3,friendliness:6,exp:2,reliability:5,salary:600, color:C.BLUE},
+  filialleiter: {label:'Filialleiter',speed:5,friendliness:7,exp:7,reliability:9,salary:2800,color:C.GOLD},
+  reiniger:     {label:'Reiniger 🧹', speed:4,friendliness:5,exp:3,reliability:8,salary:700, color:C.TEAL},
+};
+const NAMES_M=['Mehmet','Cem','Murat','Hasan','Ibrahim','Yusuf','Ali','Kemal','Tariq','Ömer'];
+const NAMES_F=['Fatima','Ayse','Zeynep','Leyla','Nadia','Sara','Derya','Melek'];
+const SURNAMES=['Yilmaz','Kaya','Demir','Sahin','Celik','Ozturk','Aksoy','Polat'];
+function rnd(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function rndBetween(a,b){return a+(b-a)*Math.random();}
+function rndInt(a,b){return Math.floor(rndBetween(a,b+1));}
+
+class Staff {
+  constructor(stype='azubi', level=1) {
+    this.stype=stype; this.level=level;
+    const all=[...NAMES_M,...NAMES_F];
+    this.name=`${rnd(all)} ${rnd(SURNAMES)}`;
+    const cfg=STAFF_TYPES[stype];
+    const base=level*1.5;
+    this.speed=Math.min(10,cfg.speed+rndInt(-1,2)+Math.floor(base*0.3));
+    this.friendliness=Math.min(10,cfg.friendliness+rndInt(-1,2));
+    this.experience=Math.min(10,cfg.exp+rndInt(-1,2)+Math.floor(base*0.2));
+    this.reliability=Math.min(10,cfg.reliability+rndInt(-2,1));
+    this.salary=cfg.salary*(1+(level-1)*0.15);
+    this.morale=rndBetween(0.6,1.0);
+    this.is_working=true;
+    this.efficiency=this._calcEff();
+  }
+  _calcEff() { return (this.speed+this.experience+this.reliability)/25*this.morale; }
+  tickMorale(mod=1.0) { this.morale=Math.max(0.2,Math.min(1,this.morale+rndBetween(-0.01*mod,0.005))); this.efficiency=this._calcEff(); }
+  toObj() { return {stype:this.stype,level:this.level,name:this.name,speed:this.speed,friendliness:this.friendliness,experience:this.experience,reliability:this.reliability,salary:this.salary,morale:this.morale}; }
+  static fromObj(o) { const s=new Staff(o.stype,o.level); Object.assign(s,o); s.efficiency=s._calcEff(); return s; }
+}
+
+// ─── BRANCH ───
+class Branch {
+  constructor(name,locType,city,country='Deutschland') {
+    this.name=name; this.location_type=locType; this.city=city; this.country=country;
+    const cfg=LOCATION_TYPES[locType]||LOCATION_TYPES.kleinststadt;
+    this.rent=cfg.rent; this.base_foot_traffic=cfg.foot_traffic;
+    this.hygiene=80; this.reputation=50;
+    this.open_hour=10; this.close_hour=22; this.is_open=true; this.is_franchise=false;
+    this.recipes=[new Recipe()];
+    this.staff=[]; this.suppliers={};
+    this.upgrades=new Set();
+    this.marketing={flyer:false,social_media:false,influencer:false,stadion:false,tv:false};
+    this.daily_customers=0; this.daily_revenue=0; this.daily_expenses=0;
+    this.total_customers=0; this.total_revenue=0;
+    this.sauce_popularity={};
+    for(const k of Object.keys(SAUCE_NAMES)) this.sauce_popularity[k]=0;
+    this.active_events=[]; this.capacity=15; this.age_days=0;
+  }
+  get staffEfficiency() {
+    if(!this.staff.length) return 0.3;
+    return Math.min(2.5, this.staff.reduce((a,s)=>a+s.efficiency,0));
+  }
+  get marketingMultiplier() {
+    let m=1.0;
+    if(this.marketing.flyer) m+=0.1;
+    if(this.marketing.social_media) m+=0.2;
+    if(this.marketing.influencer) m+=0.35;
+    if(this.marketing.stadion) m+=0.5;
+    if(this.marketing.tv) m+=0.8;
+    return m;
+  }
+  get eventMultiplier() {
+    let m=1.0;
+    for(const ev of this.active_events){
+      if(ev.effect.daily_customers) m*=ev.effect.daily_customers;
+      if(ev.effect.capacity_mod) m*=ev.effect.capacity_mod;
+    }
+    return m;
+  }
+  getHourlyCust(hour) {
+    let base=this.base_foot_traffic/12;
+    if([12,13].includes(hour)) base*=2.5;
+    else if([11,18,19].includes(hour)) base*=1.5;
+    else if([10,14,17,20].includes(hour)) base*=1.0;
+    else if(hour<10||hour>21) base*=0.1;
+    else base*=0.6;
+    base*=this.marketingMultiplier*this.eventMultiplier*(0.5+this.reputation/100)*this.staffEfficiency;
+    return Math.max(0,Math.floor(base+rndBetween(-base*0.2,base*0.2)));
+  }
+  monthlyFixedCosts() {
+    let c=this.rent;
+    for(const s of this.staff) c+=s.salary;
+    const mc={flyer:200,social_media:500,influencer:2000,stadion:5000,tv:15000};
+    for(const [k,v] of Object.entries(this.marketing)) if(v) c+=mc[k]||0;
+    return c;
+  }
+  tickDay(hygieneMod=1.0, moraleMod=1.0) {
+    this.age_days++;
+    this.hygiene=Math.max(0,this.hygiene-rndBetween(0.5,2.0)*hygieneMod);
+    if(this.staff.some(s=>s.stype==='reiniger') && this.hygiene<80) this.hygiene=80;
+    for(const s of this.staff) s.tickMorale(moraleMod);
+    for(let i=this.active_events.length-1;i>=0;i--){
+      this.active_events[i].remaining=(this.active_events[i].remaining||this.active_events[i].duration)-1;
+      if(this.active_events[i].remaining<=0) this.active_events.splice(i,1);
+    }
+    this.daily_customers=0; this.daily_revenue=0; this.daily_expenses=0;
+  }
+  toObj() {
+    return {name:this.name,location_type:this.location_type,city:this.city,country:this.country,
+      rent:this.rent,hygiene:this.hygiene,reputation:this.reputation,open_hour:this.open_hour,
+      close_hour:this.close_hour,is_open:this.is_open,is_franchise:this.is_franchise,
+      recipes:this.recipes.map(r=>r.toObj()),staff:this.staff.map(s=>s.toObj()),
+      suppliers:this.suppliers,upgrades:[...this.upgrades],marketing:this.marketing,
+      total_customers:this.total_customers,total_revenue:this.total_revenue,
+      sauce_popularity:this.sauce_popularity,active_events:this.active_events,
+      capacity:this.capacity,age_days:this.age_days};
+  }
+  static fromObj(o) {
+    const b=new Branch(o.name,o.location_type,o.city,o.country||'Deutschland');
+    Object.assign(b,o);
+    b.recipes=o.recipes.map(r=>Recipe.fromObj(r));
+    b.staff=o.staff.map(s=>Staff.fromObj(s));
+    b.upgrades=new Set(o.upgrades||[]);
+    b.active_events=o.active_events||[];
+    if(!b.sauce_popularity) {b.sauce_popularity={}; for(const k of Object.keys(SAUCE_NAMES)) b.sauce_popularity[k]=0;}
+    return b;
+  }
+}
+
+// ─── RESEARCH TREE ───
+function buildResearchTree() {
+  return {
+    schnittmaschine:  {id:'schnittmaschine', name:'Auto-Döner-Schneider',desc:'Produktionsgeschwindigkeit +30%.',cost:5000,dur:7,req:[],unlocked:false,researching:false,progress:0,effect:{speed_mod:1.3}},
+    premium_zutaten:  {id:'premium_zutaten', name:'Premium-Zutaten',     desc:'Qualität +2. Premium-Fleisch verfügbar.',cost:8000,dur:14,req:[],unlocked:false,researching:false,progress:0,effect:{quality_mod:2}},
+    ki_kasse:         {id:'ki_kasse',        name:'KI-Kassensystem',     desc:'Durchsatz +25%.',cost:12000,dur:10,req:['schnittmaschine'],unlocked:false,researching:false,progress:0,effect:{throughput_mod:1.25}},
+    schnelle_lieferung:{id:'schnelle_lieferung',name:'Expresslieferdienst',desc:'Lieferengpässe schneller behoben.',cost:7000,dur:7,req:[],unlocked:false,researching:false,progress:0,effect:{supply_resilience:0.5}},
+    eigene_logistik:  {id:'eigene_logistik', name:'Eigene Logistik',     desc:'Lieferkosten -20%.',cost:50000,dur:30,req:['schnelle_lieferung'],unlocked:false,researching:false,progress:0,effect:{cost_mod:0.8}},
+    franchise:        {id:'franchise',       name:'Franchise-System',    desc:'Passives Einkommen durch Franchises!',cost:80000,dur:45,req:['ki_kasse'],unlocked:false,researching:false,progress:0,effect:{franchise_enabled:true}},
+    brotfabrik:       {id:'brotfabrik',      name:'Eigene Brotfabrik',   desc:'Brotkosten -60%.',cost:200000,dur:60,req:['eigene_logistik'],unlocked:false,researching:false,progress:0,effect:{bread_cost_mod:0.4}},
+    fleischproduktion:{id:'fleischproduktion',name:'Fleischproduktion',  desc:'Fleischkosten -50%, Qualität +1.',cost:500000,dur:90,req:['brotfabrik'],unlocked:false,researching:false,progress:0,effect:{meat_cost_mod:0.5,quality_mod:1}},
+    solar_energie:    {id:'solar_energie',   name:'Solarenergie',        desc:'Stromkosten sinken.',cost:25000,dur:14,req:[],unlocked:false,researching:false,progress:0,effect:{energy_resilience:true,cost_mod:0.95}},
+    loyalty_app:      {id:'loyalty_app',     name:'Döner-Loyalty-App',   desc:'Stammkunden +40%.',cost:15000,dur:21,req:['ki_kasse'],unlocked:false,researching:false,progress:0,effect:{loyalty_mod:1.4}},
+    geheimrezept:     {id:'geheimrezept',    name:'Geheimes Familienrezept',desc:'Legendaröse Soße! Qualität +3, Ruf +20.',cost:30000,dur:30,req:['premium_zutaten'],unlocked:false,researching:false,progress:0,effect:{quality_mod:3,reputation_bonus:20}},
+    mega_grill:       {id:'mega_grill',      name:'Mega-Drehspieß 3000', desc:'Kapazität +100%.',cost:40000,dur:21,req:['schnittmaschine'],unlocked:false,researching:false,progress:0,effect:{capacity_mod:2}},
+  };
+}
+
+// ─── ACHIEVEMENTS ───
+const ACHIEVEMENTS = [
+  {id:'first_branch',name:'Der Anfang',icon:'🏪',desc:'Erste Filiale eröffnet.',check:gs=>gs.branches.length>=1},
+  {id:'five_branches',name:'Kleine Kette',icon:'🏪',desc:'5 Filialen gleichzeitig.',check:gs=>gs.branches.length>=5},
+  {id:'ten_branches',name:'Döner-Dynastie',icon:'👑',desc:'10 Filialen.',check:gs=>gs.branches.length>=10},
+  {id:'milliardaer',name:'Döner-Milliardär',icon:'💰',desc:'1 Mrd€ Gesamtumsatz.',check:gs=>gs.total_revenue>=1e9},
+  {id:'marktfuehrer',name:'Marktführer',icon:'📈',desc:'Über 40% Marktanteil.',check:gs=>gs.market_share>=0.4},
+  {id:'million_kunden',name:'Eine Million Kunden',icon:'🧑',desc:'1.000.000 Kunden.',check:gs=>gs.total_customers_served>=1e6},
+  {id:'knoblauch_king',name:'Knoblauch-König',icon:'🧄',desc:'500.000x Knoblauch verkauft.',check:gs=>gs.branches.reduce((a,b)=>a+(b.sauce_popularity.sosse_knoblauch||0),0)>=500000},
+  {id:'broke',name:'Döner auf Pump',icon:'💸',desc:'Kontostand unter 100€.',check:gs=>gs.money<100},
+  {id:'insomnia',name:'Döner schläft nie',icon:'😴',desc:'Tag 365 erreicht.',check:gs=>gs.day>=365},
+  {id:'schnell',name:'Flash-Döner',icon:'⚡',desc:'8x Spielgeschwindigkeit aktiviert.',check:gs=>gs.game_speed>=8},
+  {id:'hygiene_zero',name:'Gesundheitsamt-Albtraum',icon:'🦠',desc:'Hygiene auf 0 in einer Filiale.',check:gs=>gs.branches.some(b=>b.hygiene<=0)},
+  {id:'three_countries',name:'Weltenbummler',icon:'✈️',desc:'In 3 Ländern eröffnet.',check:gs=>gs.countries_present.size>=3},
+  {id:'flughafen_only',name:'Mile-High Döner',icon:'🛫',desc:'3 Flughafen-Filialen.',check:gs=>gs.branches.filter(b=>b.location_type==='flughafen').length>=3},
+  {id:'all_research',name:'Döner-Wissenschaftler',icon:'🔬',desc:'Alle Forschungen abgeschlossen.',check:gs=>Object.values(gs.research_tree).every(n=>n.unlocked)},
+  {id:'no_loan',name:'Schuldenfrei',icon:'🕊️',desc:'Kredit vollständig abbezahlt.',check:gs=>gs.loan_debt<=0&&gs.total_revenue>0,permanent:false},
+  {id:'tausend_tage',name:'Rentner des Döners',icon:'🏖️',desc:'Tag 1000.',check:gs=>gs.day>=1000},
+  {id:'paris',name:'Döner à Paris',icon:'🗼',desc:'Filiale in Paris.',check:gs=>gs.branches.some(b=>b.city==='Paris')},
+  {id:'five_staff',name:'Personalchef',icon:'👥',desc:'20 Mitarbeiter gleichzeitig.',check:gs=>gs.branches.reduce((a,b)=>a+b.staff.length,0)>=20},
+  {id:'rep_100',name:'Legendärer Ruf',icon:'⭐',desc:'Reputation 100 in einer Filiale.',check:gs=>gs.branches.some(b=>b.reputation>=100)},
+  {id:'100_tage',name:'Überlebt!',icon:'📅',desc:'100 Tage durchgehalten.',check:gs=>gs.day>=100},
+  {id:'500_tage',name:'Halbzeit?',icon:'😵',desc:'500 Tage. Wann schläfst du?',check:gs=>gs.day>=500},
+  {id:'zehn_mio',name:'Zehn Millionen!',icon:'💵',desc:'10.000.000€ Gesamtumsatz.',check:gs=>gs.total_revenue>=1e7},
+  {id:'hundert_mio',name:'Hundert Millionen!',icon:'💎',desc:'100.000.000€ Umsatz.',check:gs=>gs.total_revenue>=1e8},
+  {id:'reich',name:'Dagobert Duck',icon:'🦆',desc:'10.000.000€ auf dem Konto.',check:gs=>gs.money>=1e7},
+  {id:'mega_reich',name:'Döner-Elon',icon:'🚀',desc:'100.000.000€ auf dem Konto.',check:gs=>gs.money>=1e8},
+  {id:'guenstig',name:'Discounter-König',icon:'🏷️',desc:'Preis unter 5€ in einer Filiale.',check:gs=>gs.branches.some(b=>b.recipes.some(r=>r.price<5))},
+  {id:'teuer',name:'Premium-Döner',icon:'🎩',desc:'Preis über 12€. Wer kauft das?',check:gs=>gs.branches.some(b=>b.recipes.some(r=>r.price>12))},
+  {id:'25_filialen',name:'Ketten-Reaktion',icon:'⛓️',desc:'25 Filialen gleichzeitig.',check:gs=>gs.branches.length>=25},
+  {id:'50_filialen',name:'Halb-Tausend',icon:'🏗️',desc:'50 Filialen.',check:gs=>gs.branches.length>=50},
+  {id:'100_filialen',name:'Jahrhundert-Kette',icon:'💯',desc:'100 Filialen.',check:gs=>gs.branches.length>=100},
+  {id:'azubi_armee',name:'Ausbildungsbetrieb',icon:'🎓',desc:'5 Azubis gleichzeitig.',check:gs=>gs.branches.reduce((a,b)=>a+b.staff.filter(s=>s.stype==='azubi').length,0)>=5},
+  {id:'reiniger_armee',name:'Putz-Imperium',icon:'🧹',desc:'10 Reiniger gleichzeitig.',check:gs=>gs.branches.reduce((a,b)=>a+b.staff.filter(s=>s.stype==='reiniger').length,0)>=10},
+  {id:'high_morale',name:'Bester Chef',icon:'🥳',desc:'Alle Mitarbeiter über 90% Moral.',check:gs=>gs.branches.every(b=>b.staff.every(s=>s.morale>=0.9))&&gs.total_customers_served>0},
+  {id:'rezept_5',name:'Rezept-Meister',icon:'📋',desc:'5 Rezepte in einer Filiale.',check:gs=>gs.branches.some(b=>b.recipes.length>=5)},
+  {id:'alles_marketing',name:'Marketing-Wahnsinn',icon:'📣',desc:'Alle Marketing-Optionen aktiv.',check:gs=>gs.branches.some(b=>Object.values(b.marketing).every(v=>v))},
+  {id:'schweiz',name:'Käse trifft Döner',icon:'🇨🇭',desc:'Filiale in der Schweiz.',check:gs=>gs.branches.some(b=>b.country==='Schweiz')},
+  {id:'frankreich',name:'Sacré Döner!',icon:'🇫🇷',desc:'Filiale in Frankreich.',check:gs=>gs.branches.some(b=>b.country==='Frankreich')},
+  {id:'pleite_fast',name:'Auf der Kippe',icon:'😰',desc:'Kontostand unter 0€ überlebt.',check:gs=>gs.money<0&&gs.total_revenue>0},
+  {id:'hundert_mitarbeiter',name:'Konzern-HR',icon:'👔',desc:'100 Mitarbeiter gleichzeitig.',check:gs=>gs.branches.reduce((a,b)=>a+b.staff.length,0)>=100},
+  {id:'europa',name:'Weltkonzern',icon:'🌐',desc:'In 5 verschiedenen Ländern.',check:gs=>gs.countries_present.size>=5},
+  {id:'nacht_schicht',name:'Nachtschicht',icon:'🌙',desc:'Um 3 Uhr nachts Kunden bedient.',check:gs=>gs.hour===3&&gs.total_customers_served>0},
+  {id:'doenerhausen_only',name:'Lokalpatriot',icon:'🏘️',desc:'5 Filialen in Dönerhausen.',check:gs=>gs.branches.filter(b=>b.city==='Dönerhausen').length>=5},
+];
+
+// ─── GAME STATE ───
+class GameState {
+  constructor() {
+    this.money=STARTING_MONEY; this.day=1; this.hour=8; this.minute=0; this.tick=0;
+    this.difficulty='normal'; this.game_speed=1.0; this.paused=false;
+    this.company_name='DÖNERIMPERIUM™';
+    this.total_revenue=0; this.total_expenses=0; this.total_customers_served=0;
+    this.market_share=0.05; this.loan_debt=0; this.loan_monthly_payment=0;
+    this.branches=[]; this.research_tree=buildResearchTree(); this.active_research=null; this.research_progress_days=0;
+    this.competitors=[];
+    this.notifications=[];
+    this.revenue_history=new Array(30).fill(0);
+    this.customer_history=new Array(30).fill(0);
+    this.expense_history=new Array(30).fill(0);
+    this.victories_achieved=new Set(); this.unlocked_achievements=new Set();
+    this.total_branches_ever=0; this.countries_present=new Set(['Deutschland']);
+    this._tickAcc=0; this._humorTimer=0; this._humorInterval=60+Math.random()*60;
+  }
+  diff() {
+    return {easy:{hd:1,md:1,ep:1,ca:1,st:0.4},normal:{hd:1.4,md:1.3,ep:1.4,ca:1.5,st:0.48},hard:{hd:2,md:1.8,ep:1.8,ca:2,st:0.55}}[this.difficulty]||{hd:1,md:1,ep:1,ca:1,st:0.4};
+  }
+  advanceTime(dt) {
+    if(this.paused) return;
+    this._tickAcc+=dt*this.game_speed;
+    let ticks=Math.floor(this._tickAcc/TICK_RATE);
+    this._tickAcc-=ticks*TICK_RATE;
+    for(let i=0;i<Math.min(ticks,10);i++) this._processTick();
+    this._humorTimer+=dt*this.game_speed;
+    if(this._humorTimer>=this._humorInterval){
+      this._humorTimer=0; this._humorInterval=45+Math.random()*75;
+      if(Math.random()<0.7){const m=HUMOR_MESSAGES[Math.floor(Math.random()*HUMOR_MESSAGES.length)];this.addNotif(m[1],m[0]);}
+    }
+  }
+  _processTick() {
+    this.tick++; this.minute=(this.minute+10)%60;
+    if(this.minute===0) this._processHour();
+  }
+  _processHour() {
+    this.hour=(this.hour+1)%24;
+    if(this.hour===0) this._processDay();
+    else for(const b of this.branches) if(b.is_open&&b.open_hour<=this.hour&&this.hour<b.close_hour) this._simulateBranchHour(b);
+  }
+  _simulateBranchHour(branch) {
+    const n=branch.getHourlyCust(this.hour);
+    for(const recipe of branch.recipes) {
+      const perRecipe=Math.max(0,Math.floor(n/branch.recipes.length));
+      for(let i=0;i<perRecipe;i++) this._serveCustomer(branch,recipe);
+    }
+  }
+  _serveCustomer(branch, recipe) {
+    const d=this.diff();
+    const ctypes=Object.keys(CUSTOMER_RATES);
+    const ctype=this._pickCustomerType(this.hour);
+    const cfg=CUSTOMER_RATES[ctype];
+    const budget=rndBetween(...cfg.budget);
+    const abandonChance=Math.max(0,(100-branch.hygiene)/200+(50-branch.reputation)/200);
+    if(Math.random()<abandonChance) return;
+    if(budget<recipe.price*0.7) return;
+    let quality=recipe.qualityScore()+this._qualityBonus();
+    const qn=(quality-5)/5;
+    let satisfaction=qn*0.6;
+    if(budget>=recipe.price) satisfaction+=0.2; else satisfaction-=((recipe.price-budget)/Math.max(recipe.price,1))*0.4*(1-qn*0.5);
+    if(Math.random()<0.3) satisfaction+=0.2; // sauce match
+    satisfaction=Math.max(0,Math.min(1,satisfaction));
+    const price=Math.min(recipe.price,budget);
+    const cost=recipe.ingredientCost()*this._costMod();
+    const profit=price-cost;
+    branch.daily_revenue+=profit; branch.total_revenue+=price; branch.daily_customers++;
+    branch.total_customers++;
+    const sosse=recipe.sosse||'sosse_knoblauch';
+    branch.sauce_popularity[sosse]=(branch.sauce_popularity[sosse]||0)+1;
+    this.money+=profit; this.total_revenue+=price; this.total_expenses+=cost; this.total_customers_served++;
+    const repChange=(satisfaction-d.st)*0.3;
+    branch.reputation=Math.max(0,Math.min(100,branch.reputation+repChange));
+  }
+  _pickCustomerType(hour) {
+    const types=Object.entries(CUSTOMER_RATES);
+    const weights=types.map(([,cfg])=>cfg.peak.includes(hour)?cfg.rate*2:Math.max(1,Math.floor(cfg.rate/3)));
+    const total=weights.reduce((a,b)=>a+b,0); let r=Math.random()*total;
+    for(let i=0;i<types.length;i++){r-=weights[i];if(r<=0)return types[i][0];}
+    return 'student';
+  }
+  _qualityBonus() { return Object.values(this.research_tree).filter(n=>n.unlocked&&n.effect.quality_mod).reduce((a,n)=>a+n.effect.quality_mod,0); }
+  _costMod() { return Object.values(this.research_tree).filter(n=>n.unlocked&&n.effect.cost_mod).reduce((a,n)=>a*n.effect.cost_mod,1); }
+  _processDay() {
+    this.day++;
+    if(this.day%30===1) this._processMonthly();
+    let totalDailyExp=0;
+    for(const b of this.branches){
+      const dc=b.monthlyFixedCosts()/30;
+      b.daily_expenses=dc; totalDailyExp+=dc;
+    }
+    this.money-=totalDailyExp; this.total_expenses+=totalDailyExp;
+    // Research
+    if(this.active_research){
+      const node=this.research_tree[this.active_research];
+      if(node&&node.researching){
+        this.research_progress_days++;
+        node.progress=this.research_progress_days/node.dur;
+        if(this.research_progress_days>=node.dur){
+          node.unlocked=true; node.researching=false; this.active_research=null; this.research_progress_days=0;
+          this.addNotif(`Forschung abgeschlossen: ${node.name}!`,'success');
+          this._applyResearch(node);
+        }
+      }
+    }
+    for(const c of this.competitors) c.age_days++, c.market_share=Math.max(0.01,Math.min(0.8,c.market_share+rndBetween(-0.002,0.002*this.diff().ca)));
+    this._checkRandomEvents(); this._checkVictory(); this._checkAchievements();
+    const di=(this.day-1)%30;
+    const dailyRev=this.branches.reduce((a,b)=>a+b.daily_revenue,0);
+    const dailyCust=this.branches.reduce((a,b)=>a+b.daily_customers,0);
+    this.revenue_history[di]=dailyRev; this.customer_history[di]=dailyCust; this.expense_history[di]=totalDailyExp;
+    const BASE_COMP=800*12;
+    const compC=this.competitors.length?this.competitors.reduce((a,c)=>a+Math.max(1,Math.floor(c.market_share*BASE_COMP)),0):dailyCust*5;
+    const total=Math.max(1,dailyCust+compC);
+    this.market_share=this.market_share*0.95+(dailyCust/total)*0.05;
+    this.market_share=Math.max(0.001,Math.min(0.99,this.market_share));
+    const d=this.diff();
+    for(const b of this.branches) b.tickDay(d.hd,d.md);
+    if(this.day%60===0&&this.branches.length) this._maybeAddCompetitor();
+    if(this.money<-50000) this.addNotif('BANKROTT! Du bist pleite! Spiel verloren!','danger');
+    if(this.day%7===0) { try{this.save('auto');}catch(e){} }
+  }
+  _processMonthly() {
+    if(this.loan_monthly_payment>0){
+      this.money-=this.loan_monthly_payment; this.total_expenses+=this.loan_monthly_payment;
+      this.addNotif(`Kreditrate: -${this.loan_monthly_payment.toFixed(0)}€ (Schulden: ${this.loan_debt.toFixed(0)}€)`,'warn');
+    }
+    const mRev=this.revenue_history.reduce((a,b)=>a+b,0);
+    this.addNotif(`Monatsabschluss: ${mRev.toFixed(0)}€ Umsatz, ${this.branches.length} Filialen`,'info');
+  }
+  _applyResearch(node) {
+    if(node.effect.reputation_bonus) for(const b of this.branches) b.reputation=Math.min(100,b.reputation+node.effect.reputation_bonus);
+    if(node.effect.capacity_mod) for(const b of this.branches) b.capacity=Math.floor(b.capacity*node.effect.capacity_mod);
+  }
+  _checkRandomEvents() {
+    const d=this.diff();
+    for(const ev of RANDOM_EVENTS){
+      if(Math.random()<ev.prob*d.ep&&this.branches.length){
+        const b=this.branches[Math.floor(Math.random()*this.branches.length)];
+        if(ev.effect.hygiene_check){
+          if(b.hygiene<50){const pen=rndBetween(500,2000);this.money-=pen;this.addNotif(`Gesundheitsamt: Bußgeld ${pen.toFixed(0)}€ für ${b.name}!`,'danger');}
+          else this.addNotif(`Lebensmittelkontrolle bestanden! Bonus für ${b.name}!`,'success');
+          continue;
+        }
+        const evCopy={...ev,effect:{...ev.effect},remaining:ev.duration};
+        b.active_events.push(evCopy);
+        this.addNotif(`${b.name}: ${ev.name} — ${ev.desc}`,ev.type);
+      }
+    }
+  }
+  _checkVictory() {
+    if(this.branches.length>=500&&!this.victories_achieved.has('branches_500')){this.victories_achieved.add('branches_500');this.addNotif('🏆 SIEG! 500 Filialen erreicht! DÖNERIMPERIUM™ ist vollständig!','success');}
+    if(this.total_revenue>=1e9&&!this.victories_achieved.has('milliarde')){this.victories_achieved.add('milliarde');this.addNotif('🏆 SIEG! Eine MILLIARDE Euro Umsatz! Legendär!','success');}
+    if(this.countries_present.size>=20&&!this.victories_achieved.has('europa')){this.victories_achieved.add('europa');this.addNotif('🏆 SIEG! Europaweit! DÖNERIMPERIUM™ erobert Europa!','success');}
+  }
+  _checkAchievements() {
+    for(const a of ACHIEVEMENTS){
+      let met=false; try{met=a.check(this);}catch(e){}
+      if(a.permanent!==false){if(met&&!this.unlocked_achievements.has(a.id)){this.unlocked_achievements.add(a.id);this.addNotif(`Achievement: ${a.name}!`,'success');}}
+      else{if(met){if(!this.unlocked_achievements.has(a.id)) this.addNotif(`Achievement: ${a.name}!`,'success');this.unlocked_achievements.add(a.id);}else this.unlocked_achievements.delete(a.id);}
+    }
+  }
+  _maybeAddCompetitor() {
+    const cfg=COMPETITOR_TYPES[Math.floor(Math.random()*COMPETITOR_TYPES.length)];
+    const city=rnd(this.branches.map(b=>b.city));
+    const comp={name:cfg.name,quality:cfg.quality,price_mod:cfg.price_mod,color:cfg.color,city,market_share:rndBetween(0.05,0.2),reputation:rndBetween(40,80),age_days:0};
+    this.competitors.push(comp);
+    this.addNotif(`Neue Konkurrenz: ${comp.name} eröffnet in ${city}!`,'warn');
+  }
+  openBranch(name,locType,city,country='Deutschland') {
+    const cfg=LOCATION_TYPES[locType]||LOCATION_TYPES.kleinststadt;
+    const cost=cfg.rent*3;
+    if(this.money<cost){this.addNotif(`Zu wenig Geld! Benötigt: ${cost.toFixed(0)}€`,'danger');return null;}
+    this.money-=cost;
+    const b=new Branch(name,locType,city,country);
+    b.staff.push(new Staff('azubi',1));
+    this.branches.push(b); this.total_branches_ever++; this.countries_present.add(country);
+    this.addNotif(`Neue Filiale '${name}' in ${city} eröffnet! Kosten: ${cost.toFixed(0)}€`,'success');
+    return b;
+  }
+  closeBranch(idx) { if(idx>=0&&idx<this.branches.length){const b=this.branches.splice(idx,1)[0];this.addNotif(`Filiale '${b.name}' geschlossen.`,'warn');} }
+  startResearch(nodeId) {
+    const node=this.research_tree[nodeId];
+    if(!node||node.unlocked||node.researching) return false;
+    for(const req of node.req) if(!this.research_tree[req].unlocked){this.addNotif(`Voraussetzung fehlt: ${this.research_tree[req].name}`,'warn');return false;}
+    if(this.money<node.cost){this.addNotif(`Zu wenig Geld: ${node.cost.toFixed(0)}€`,'danger');return false;}
+    if(this.active_research){this.addNotif('Es läuft bereits eine Forschung!','warn');return false;}
+    this.money-=node.cost; node.researching=true; this.active_research=nodeId; this.research_progress_days=0;
+    this.addNotif(`Forschung gestartet: ${node.name}!`,'info'); return true;
+  }
+  addNotif(msg,type='info') {
+    if(this.notifications.length&&this.notifications[this.notifications.length-1].msg===msg) return;
+    this.notifications.push({msg,type,time:this.day*24+this.hour,age:0});
+    if(this.notifications.length>50) this.notifications.shift();
+    addToast(msg,type);
+  }
+  tickNotifs(dt) { for(const n of this.notifications) n.age+=dt; }
+  save(slot) {
+    const obj=this.toObj();
+    localStorage.setItem(`doenerimperium_${slot}`,JSON.stringify(obj));
+    this.addNotif(`Spiel gespeichert (Slot ${slot+1})!`,'success');
+  }
+  static load(slot) {
+    const data=localStorage.getItem(`doenerimperium_${slot}`);
+    if(!data) return null;
+    try{return GameState.fromObj(JSON.parse(data));}catch(e){return null;}
+  }
+  static saveExists(slot) {
+    if(slot==='auto') return !!localStorage.getItem('doenerimperium_auto');
+    return !!localStorage.getItem(`doenerimperium_${slot}`);
+  }
+  toObj() {
+    return {version:'1.0',money:this.money,day:this.day,hour:this.hour,minute:this.minute,tick:this.tick,
+      company_name:this.company_name,total_revenue:this.total_revenue,total_expenses:this.total_expenses,
+      total_customers_served:this.total_customers_served,difficulty:this.difficulty,market_share:this.market_share,
+      loan_debt:this.loan_debt,loan_monthly_payment:this.loan_monthly_payment,
+      branches:this.branches.map(b=>b.toObj()),
+      research_tree:Object.fromEntries(Object.entries(this.research_tree).map(([k,v])=>[k,{...v}])),
+      active_research:this.active_research,research_progress_days:this.research_progress_days,
+      competitors:this.competitors,notifications:this.notifications.slice(-20),
+      revenue_history:this.revenue_history,customer_history:this.customer_history,expense_history:this.expense_history,
+      victories_achieved:[...this.victories_achieved],unlocked_achievements:[...this.unlocked_achievements],
+      total_branches_ever:this.total_branches_ever,countries_present:[...this.countries_present],game_speed:this.game_speed};
+  }
+  static fromObj(o) {
+    const gs=new GameState();
+    Object.assign(gs,o);
+    gs.branches=(o.branches||[]).map(b=>Branch.fromObj(b));
+    const rt=buildResearchTree();
+    for(const [k,v] of Object.entries(o.research_tree||{})) if(rt[k]){rt[k].unlocked=v.unlocked||false;rt[k].researching=v.researching||false;rt[k].progress=v.progress||0;}
+    gs.research_tree=rt;
+    gs.victories_achieved=new Set(o.victories_achieved||[]);
+    gs.unlocked_achievements=new Set(o.unlocked_achievements||[]);
+    gs.countries_present=new Set(o.countries_present||['Deutschland']);
+    gs.notifications=o.notifications||[];
+    gs.revenue_history=o.revenue_history||new Array(30).fill(0);
+    gs.customer_history=o.customer_history||new Array(30).fill(0);
+    gs.expense_history=o.expense_history||new Array(30).fill(0);
+    return gs;
+  }
+}
+
+// ─── GAME CONTROLLER ───
+const game = {
+  gs: new GameState(), screen:'main_menu', prevScreen:'overview',
+  inGame:false, anim:0, particles:[], pendingName:'',
+  selectedDiff:1, selectedBranch:-1, selectedTab:0, selectedRecipe:0,
+  branchScroll:0, achScroll:0,
+  nameInput:'', namePhase:'', nameDialog:false,
+  newBranchState:null, modal:null,
+  hireRects:{}, fireRects:[], supplyRects:[],
+  scale:1,
+
+  init() {
+    for(let i=0;i<40;i++) this.particles.push(this.makeParticle());
+  },
+  makeParticle() {
+    return {x:Math.random()*W,y:Math.random()*H,vx:rndBetween(-20,20),vy:rndBetween(-40,-10),
+      size:rndBetween(2,6),color:rnd([C.GOLD,C.ORANGE,C.RED,C.GREEN]),life:Math.random()*3,maxLife:rndBetween(2,5)};
+  },
+  setScreen(name) {
+    if(name==='main_menu'){this.inGame=false;this.selectedBranch=-1;}
+    this.prevScreen=this.screen; this.screen=name;
+    if(name==='achievements') this.achScroll=0;
+    if(name==='branches') this.selectedTab=0;
+  },
+  startNewGame(name, diff) {
+    this.gs=new GameState();
+    this.gs.company_name=name;
+    this.gs.difficulty=diff;
+    this.gs.openBranch(`${name} #1`,'kleinststadt','Dönerhausen');
+    this.gs.addNotif(`Willkommen bei ${name}!`,'success');
+    this.gs.addNotif('Tipp: Stelle Mitarbeiter ein und passe dein Rezept an!','info');
+    this.inGame=true; this.selectedBranch=0; this.setScreen('overview');
+  },
+  loadGame(slot) {
+    const gs=GameState.load(slot);
+    if(gs){this.gs=gs;gs.addNotif(`Spiel geladen! Tag ${gs.day}`,'success');this.inGame=true;this.selectedBranch=gs.branches.length?0:-1;this.setScreen('overview');}
+    else addToast('Kein Spielstand in diesem Slot!','danger');
+  }
+};
+game.init();
+
+const DIFFICULTIES = [
+  {key:'easy',  label:'Einfach', desc:'Kunden sind nachsichtig, Events seltener. Zum Reinschnuppern.', color:C.GREEN},
+  {key:'normal',label:'Normal',  desc:'Ausgewogene Herausforderung. Der klassische Döner-Weg.',       color:C.GOLD},
+  {key:'hard',  label:'Schwer',  desc:'Kunden anspruchsvoll, Hygiene verfällt schnell, Konkurrenz aggressiv.', color:C.RED},
+];
+
+// ─── SCREENS ───
+
+function drawMainMenu() {
+  gradientRect(0,0,W,H,C.BG,'#1e140a');
+  // Particles
+  for(const p of game.particles){ fillCirc(p.x,p.y,p.size,p.color); }
+  doenerIcon(W/2,160,50,game.anim);
+  drawText('DÖNER', FONTS.title, C.GOLD, W/2, 225, 'center','top');
+  drawText('IMPERIUM™', FONTS.title, C.ORANGE, W/2, 290, 'center','top');
+  drawText('Baue das größte Döner-Imperium der Welt!',FONTS.md,C.TEXT2,W/2,375,'center','top');
+
+  const cw=W/2, ch=H/2;
+  const btnNew=new Button(cw-140,ch-10,280,50,'Neues Spiel',C.GOLD,C.BG);
+  const btnLoad=new Button(cw-140,ch+70,280,50,'Spiel laden',C.ORANGE,C.BG);
+  const btnQuit=new Button(cw-140,ch+150,280,50,'Beenden',C.RED,C.WHITE);
+  btnLoad.enabled=GameState.saveExists(0)||GameState.saveExists(1)||GameState.saveExists(2);
+  btnNew.draw(); btnLoad.draw(); btnQuit.draw();
+  if(btnNew.update()){game.nameInput='DÖNERIMPERIUM™';game.namePhase='name';game.nameDialog=true;}
+  if(btnLoad.update()) game.setScreen('load_menu');
+  if(btnQuit.update()) window.close();
+
+  drawText('v1.0 | DÖNERIMPERIUM™ 2026',FONTS.xxs,C.GRAY,W/2,H-18,'center','top');
+
+  if(game.nameDialog) drawNameDialog();
+}
+
+function drawNameDialog() {
+  ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
+  const bw=460,bh=180, bx=W/2-bw/2, by=H/2-bh/2;
+  fillRect(bx,by,bw,bh,C.PANEL,C.GOLD,2,10);
+  drawText('Firmenname eingeben:',FONTS.md,C.GOLD,W/2,by+22,'center','top');
+  fillRect(bx+20,by+65,bw-40,40,C.BG2,C.GOLD,1,6);
+  const cursor=Math.floor(game.anim*2)%2===0?'|':'';
+  drawText(game.nameInput+cursor,FONTS.md,C.WHITE,bx+30,by+72,'left','top');
+  drawText('ENTER = Starten   ESC = Abbrechen',FONTS.xs,C.GRAY,W/2,by+140,'center','top');
+
+  if(keyPressed==='Enter'&&game.nameInput.trim()){
+    game.pendingName=game.nameInput.trim(); game.nameDialog=false; game.setScreen('difficulty'); consumeKey();
+  } else if(keyPressed==='Escape'){game.nameDialog=false;consumeKey();}
+  else if(keyPressed==='Backspace'){game.nameInput=game.nameInput.slice(0,-1);consumeKey();}
+  else if(charTyped){game.nameInput+=(game.nameInput.length<30?charTyped:'');consumeKey();}
+}
+
+function drawDifficulty() {
+  gradientRect(0,0,W,H,C.BG,'#1e140a');
+  drawText('Schwierigkeitsgrad wählen',FONTS.lg,C.GOLD,W/2,100,'center','top');
+  drawText(`Firma: ${game.pendingName}`,FONTS.md,C.TEXT2,W/2,155,'center','top');
+
+  const cw=W/2, cy=H/2-95;
+  const cw2=220, ch2=190, gap=30;
+  const total=DIFFICULTIES.length*cw2+(DIFFICULTIES.length-1)*gap;
+  const startX=cw-total/2;
+
+  for(let i=0;i<DIFFICULTIES.length;i++){
+    const d=DIFFICULTIES[i]; const cx=startX+i*(cw2+gap);
+    const sel=i===game.selectedDiff;
+    fillRect(cx,cy,cw2,ch2,sel?lerpColor(C.PANEL2,d.color,0.1):C.PANEL,d.color,sel?3:1,10);
+    drawText(d.label,FONTS.lg,d.color,cx+cw2/2,cy+30,'center','top');
+    // wrap desc
+    ctx.font=FONTS.xs; ctx.textAlign='center'; ctx.fillStyle=C.GRAY;
+    const words=d.desc.split(' '); let line='', lines=[];
+    for(const w of words){const t=line?line+' '+w:w;if(ctx.measureText(t).width<cw2-20&&line)line=t;else{if(line)lines.push(line);line=w;}}
+    if(line)lines.push(line);
+    for(let j=0;j<lines.length;j++) drawText(lines[j],FONTS.xs,C.GRAY,cx+cw2/2,cy+130+j*18,'center','top');
+    if(sel){ctx.fillStyle=d.color;ctx.beginPath();ctx.moveTo(cx+cw2/2-10,cy-14);ctx.lineTo(cx+cw2/2+10,cy-14);ctx.lineTo(cx+cw2/2,cy-4);ctx.fill();}
+    if(mouse.clicked&&mouse.x>=cx&&mouse.x<=cx+cw2&&mouse.y>=cy&&mouse.y<=cy+ch2){game.selectedDiff=i;consumeClick();}
+  }
+
+  const btnBack=new Button(cw-145,cy+210,130,45,'← Zurück',C.PANEL2,C.TEXT);
+  const btnStart=new Button(cw+15,cy+210,130,45,'Starten!',C.GOLD,C.BG);
+  btnBack.draw(); btnStart.draw();
+  if(btnBack.update()) game.setScreen('main_menu');
+  if(btnStart.update()) game.startNewGame(game.pendingName, DIFFICULTIES[game.selectedDiff].key);
+
+  if(keyPressed==='ArrowLeft'){game.selectedDiff=Math.max(0,game.selectedDiff-1);consumeKey();}
+  if(keyPressed==='ArrowRight'){game.selectedDiff=Math.min(2,game.selectedDiff+1);consumeKey();}
+  if(keyPressed==='Enter'){game.startNewGame(game.pendingName,DIFFICULTIES[game.selectedDiff].key);consumeKey();}
+  if(keyPressed==='Escape'){game.setScreen('main_menu');consumeKey();}
+  drawText('← → wählen   ENTER starten',FONTS.xs,C.GRAY,W/2,H-22,'center','top');
+}
+
+function drawLoadMenu() {
+  gradientRect(0,0,W,H,C.BG,'#1e140a');
+  drawText('Spielstand laden',FONTS.lg,C.GOLD,W/2,70,'center','top');
+  const btnBack=new Button(20,20,110,36,'← Zurück',C.PANEL2,C.TEXT);
+  btnBack.draw(); if(btnBack.update()) game.setScreen('main_menu');
+
+  for(let i=0;i<3;i++){
+    const y=180+i*120;
+    fillRect(W/2-200,y-20,400,100,C.PANEL,C.BORDER,1,8);
+    const exists=GameState.saveExists(i);
+    if(exists){
+      const gs=GameState.load(i);
+      drawText(`Slot ${i+1}: ${gs.company_name}`,FONTS.md,C.GOLD,W/2,y,'center','top');
+      drawText(`Tag ${gs.day} | ${formatMoney(gs.money)} | ${gs.branches.length} Filialen`,FONTS.sm,C.TEXT2,W/2,y+30,'center','top');
+    } else {
+      drawText(`Slot ${i+1}: Leer`,FONTS.md,C.GRAY,W/2,y+14,'center','top');
+    }
+    const btn=new Button(W/2-150,y+60,300,36,`Slot ${i+1} laden`,C.ORANGE,C.BG);
+    btn.enabled=exists; btn.draw();
+    if(btn.update()) game.loadGame(i);
+  }
+}
+
+// ─── HUD ───
+const NAV = [
+  {label:'🏠 Übersicht',screen:'overview'},{label:'🏪 Filialen',screen:'branches'},
+  {label:'👥 Personal',screen:'staff'},{label:'🔬 Forschung',screen:'research'},
+  {label:'📊 Statistiken',screen:'stats'},{label:'💰 Finanzen',screen:'finance'},
+  {label:'⚙ Optionen',screen:'options'}
+];
+function drawHUD() {
+  const gs=game.gs;
+  gradientRect(0,0,W,42,C.PANEL,C.BG2);
+  strokeLine(0,42,W,42,C.GOLD,1);
+  strokeLine(0,78,W,78,C.BORDER,1);
+  drawText(gs.company_name,FONTS.md,C.GOLD,10,12,'left','top');
+  drawText(formatMoney(gs.money),FONTS.md,moneyColor(gs.money),290,12,'left','top');
+  drawText(`Tag ${gs.day} | ${String(gs.hour).padStart(2,'0')}:${String(gs.minute).padStart(2,'0')}`,FONTS.sm,C.TEXT2,490,14,'left','top');
+  drawText(`🏪 ${gs.branches.length} Filialen`,FONTS.sm,C.TEXT2,660,14,'left','top');
+  const spdStr=gs.paused?'PAUSE':`${gs.game_speed}x`;
+  drawText(spdStr,FONTS.sm,gs.paused?C.RED:C.GOLD,W-270,14,'left','top');
+
+  // Speed buttons
+  const bw=34;
+  const btnPause=new Button(W-162,8,bw,28,gs.paused?'▶':'⏸',C.PANEL2,C.GOLD,FONTS.sm);
+  const btn1x=new Button(W-124,8,bw,28,'1x',gs.game_speed===1?C.GOLD:C.PANEL2,gs.game_speed===1?C.BG:C.TEXT,FONTS.xs);
+  const btn2x=new Button(W-86,8,bw,28,'2x',gs.game_speed===3?C.GOLD:C.PANEL2,gs.game_speed===3?C.BG:C.TEXT,FONTS.xs);
+  const btn3x=new Button(W-48,8,bw,28,'8x',gs.game_speed===8?C.GOLD:C.PANEL2,gs.game_speed===8?C.BG:C.TEXT,FONTS.xs);
+  btnPause.draw(); btn1x.draw(); btn2x.draw(); btn3x.draw();
+  if(btnPause.update()) gs.paused=!gs.paused;
+  if(btn1x.update()) gs.game_speed=1;
+  if(btn2x.update()) gs.game_speed=3;
+  if(btn3x.update()) gs.game_speed=8;
+
+  const btnAch=new Button(W-268,8,100,28,'Achievements',C.PANEL2,C.GOLD,FONTS.xs);
+  btnAch.draw(); if(btnAch.update()) game.setScreen('achievements');
+
+  // Nav
+  const navY=44, navH=32, nw=Math.floor((W-20)/NAV.length);
+  for(let i=0;i<NAV.length;i++){
+    const scr=NAV[i].screen, lbl=NAV[i].label;
+    const active=game.screen===scr||(scr==='branches'&&game.screen==='staff');
+    const btn=new Button(10+i*nw,navY,nw-4,navH,lbl,active?lerpColor(C.GOLD,C.PANEL2,0.5):C.PANEL2,active?C.GOLD:C.TEXT2,FONTS.xs);
+    btn.draw();
+    if(btn.update()){game.setScreen(scr);if(scr==='staff'){game.setScreen('branches');game.selectedTab=2;}}
+  }
+}
+
+// ─── OVERVIEW SCREEN ───
+function drawOverview() {
+  const gs=game.gs; const y0=85;
+  drawText('📊 Unternehmensübersicht',FONTS.lg,C.GOLD,20,y0,'left','top');
+
+  // Left: key stats
+  fillRect(20,y0+45,380,280,C.PANEL,C.BORDER,1,8);
+  drawText('💰 Finanzkennzahlen',FONTS.sm,C.GOLD,34,y0+59,'left','top');
+  const stats=[
+    ['Kapital:',formatMoney(gs.money),moneyColor(gs.money)],
+    ['Gesamtumsatz:',formatMoney(gs.total_revenue),C.GREEN],
+    ['Ausgaben gesamt:',formatMoney(gs.total_expenses),C.RED2],
+    ['Nettogewinn:',formatMoney(gs.total_revenue-gs.total_expenses),moneyColor(gs.total_revenue-gs.total_expenses)],
+    ['Filialen:',String(gs.branches.length),C.BLUE2],
+    ['Kunden gesamt:',gs.total_customers_served.toLocaleString('de'),C.ORANGE],
+    ['Marktanteil:',(gs.market_share*100).toFixed(1)+'%',C.TEAL],
+    ['Länder:',String(gs.countries_present.size),C.PURPLE],
+  ];
+  for(let i=0;i<stats.length;i++){
+    const [l,v,vc]=stats[i]; const ry=y0+85+i*28;
+    if(i%2===1) fillRect(21,ry-2,378,26,C.BG,null,0,2);
+    drawText(l,FONTS.sm,C.TEXT2,34,ry,'left','top');
+    drawText(v,FONTS.sm,vc,394,ry,'right','top');
+  }
+
+  // Charts
+  fillRect(420,y0+45,410,130,C.PANEL,C.BORDER,1,8);
+  drawText('📈 Tagesgewinn (30 Tage)',FONTS.sm,C.GOLD,434,y0+57,'left','top');
+  miniChart(gs.revenue_history,430,y0+82,390,88,C.GREEN);
+  fillRect(420,y0+192,410,130,C.PANEL,C.BORDER,1,8);
+  drawText('👥 Kunden/Tag (30 Tage)',FONTS.sm,C.GOLD,434,y0+204,'left','top');
+  miniChart(gs.customer_history.map(v=>v),430,y0+229,390,88,C.BLUE);
+
+  // Branch leaderboard
+  fillRect(850,y0+45,400,280,C.PANEL,C.BORDER,1,8);
+  drawText('🏆 Top Filialen',FONTS.sm,C.GOLD,864,y0+59,'left','top');
+  const sorted=[...gs.branches].sort((a,b)=>b.total_revenue-a.total_revenue).slice(0,7);
+  for(let i=0;i<sorted.length;i++){
+    const b=sorted[i]; const ry=y0+90+i*34;
+    const bc=[C.GOLD,C.ORANGE,C.GREEN,C.BLUE,C.TEAL,C.PURPLE,C.RED][i];
+    drawText(`${i+1}. ${b.name.slice(0,18)}`,FONTS.sm,C.TEXT,864,ry,'left','top');
+    drawText(formatMoney(b.total_revenue),FONTS.sm,bc,1240,ry,'right','top');
+    drawBar(864,ry+20,360,8,b.total_revenue,Math.max(1,sorted[0].total_revenue),bc,undefined,false);
+  }
+  if(!gs.branches.length) drawText('Noch keine Filialen!',FONTS.md,C.GRAY,1050,y0+170,'center','middle');
+
+  // Recent notifications
+  fillRect(20,y0+340,820,220,C.PANEL,C.BORDER,1,8);
+  drawText('📢 Ereignisse & Meldungen',FONTS.sm,C.GOLD,34,y0+354,'left','top');
+  const recent=gs.notifications.slice(-8).reverse();
+  for(let i=0;i<recent.length;i++){
+    const n=recent[i]; const tc=typeColor(n.type);
+    let msg=n.msg; if(msg.length>90) msg=msg.slice(0,87)+'...';
+    drawText(`• ${msg}`,FONTS.xs,tc,34,y0+382+i*22,'left','top');
+  }
+
+  // Victory conditions
+  fillRect(850,y0+340,400,220,C.PANEL,C.BORDER,1,8);
+  drawText('🏆 Siegbedingungen',FONTS.sm,C.GOLD,864,y0+354,'left','top');
+  const conds=[
+    ['500 Filialen',gs.branches.length,500,'branches_500'],
+    ['1 Mrd€ Umsatz',gs.total_revenue,1e9,'milliarde'],
+    ['Marktführer(40%)',gs.market_share,0.40,'marktfuehrer'],
+    ['Europa(20 Länder)',gs.countries_present.size,20,'europa'],
+  ];
+  for(let i=0;i<conds.length;i++){
+    const [desc,cur,target,vid]=conds[i]; const ry=y0+385+i*44;
+    const achieved=gs.victories_achieved.has(vid);
+    drawText(`${achieved?'✓':'○'} ${desc}`,FONTS.sm,achieved?C.GOLD:C.TEXT,864,ry,'left','top');
+    drawText((Math.min(100,cur/target*100).toFixed(0))+'%',FONTS.sm,achieved?C.GREEN:C.GRAY,1244,ry,'right','top');
+    drawBar(864,ry+20,370,10,cur,target,achieved?C.GREEN:C.GOLD,undefined,false);
+  }
+  doenerIcon(W-60,y0+15,28,game.anim);
+}
+
+
+// ─── BRANCHES SCREEN ───
+function drawBranches() {
+  const gs=game.gs; const y0=85;
+  drawText('🏪 Filialen-Management',FONTS.lg,C.GOLD,10,y0,'left','top');
+
+  // Branch list (left panel)
+  const lx=10,ly=y0+35,lw=400,lh=575;
+  fillRect(lx,ly,lw,lh,C.BG2,C.BORDER,1,4);
+  const itemH=60;
+  // scrolling
+  const totalH=gs.branches.length*itemH;
+  if(totalH>lh && mouse.x>=lx&&mouse.x<=lx+lw&&mouse.y>=ly&&mouse.y<=ly+lh){
+    // handled below in event
+  }
+  ctx.save(); ctx.beginPath(); ctx.rect(lx,ly,lw,lh); ctx.clip();
+  for(let i=0;i<gs.branches.length;i++){
+    const b=gs.branches[i]; const iy=ly+i*itemH-game.branchScroll;
+    if(iy+itemH<ly||iy>ly+lh) continue;
+    const sel=i===game.selectedBranch;
+    const bg=sel?lerpColor(C.GOLD,C.BG,0.7):i%2===0?C.PANEL:C.BG2;
+    fillRect(lx,iy,lw,itemH,bg,null,0,0);
+    strokeLine(lx,iy+itemH-1,lx+lw,iy+itemH-1,C.BORDER,1);
+    const rc=b.reputation>=70?C.GREEN:b.reputation>=40?C.WARN:C.RED;
+    drawText(`${b.is_open?'●':'○'} ${b.name}`,FONTS.sm,b.is_open?rc:C.GRAY,lx+10,iy+8,'left','top');
+    drawText(`${b.city} | Rep:${b.reputation.toFixed(0)} | ${formatMoney(b.daily_revenue)}/Tag`,FONTS.xxs,C.TEXT3,lx+10,iy+30,'left','top');
+    if(mouse.clicked&&mouse.x>=lx&&mouse.x<=lx+lw&&mouse.y>=iy&&mouse.y<=iy+itemH){
+      game.selectedBranch=i; game.selectedTab=0; consumeClick();
+    }
+  }
+  if(!gs.branches.length) drawText('Keine Filialen',FONTS.md,C.GRAY,lx+lw/2,ly+lh/2,'center','middle');
+  ctx.restore();
+
+  // Buttons below list
+  const btnNew=new Button(lx,ly+lh+8,190,36,'+ Neue Filiale',C.GOLD,C.BG,FONTS.sm);
+  const btnClose=new Button(lx+200,ly+lh+8,200,36,'Filiale schließen',C.RED,C.WHITE,FONTS.sm);
+  btnClose.enabled=game.selectedBranch>=0;
+  btnNew.draw(); btnClose.draw();
+  if(btnNew.update()){game.newBranchState={phase:'name',name:'',city:'',country:'Deutschland',locType:'kleinststadt'};}
+  if(btnClose.update()&&game.selectedBranch>=0){
+    const b=gs.branches[game.selectedBranch];
+    game.modal={title:'Filiale schließen?',msg:`Möchtest du '${b.name}' wirklich schließen?`,
+      btns:[{label:'Schließen',color:C.RED,result:'close'},{label:'Abbrechen',color:C.PANEL2,result:null}]};
+  }
+
+  if(game.newBranchState){drawNewBranchDialog();return;}
+  if(game.modal){drawModal();return;}
+
+  // Right panel
+  if(game.selectedBranch<0||game.selectedBranch>=gs.branches.length){
+    drawText('← Wähle eine Filiale aus',FONTS.md,C.GRAY,700,400,'center','middle'); return;
+  }
+  const branch=gs.branches[game.selectedBranch];
+
+  // Tabs
+  const tabs=['Info','Rezept','Personal','Marketing','Lieferkette'];
+  const tx=420,ty=y0+35,tw=840,th=32;
+  const tabW=tw/tabs.length;
+  fillRect(tx,ty,tw,th,C.PANEL2,C.BORDER,1,4);
+  for(let i=0;i<tabs.length;i++){
+    const tbx=tx+i*tabW;
+    if(i===game.selectedTab){fillRect(tbx,ty,tabW,th,C.PANEL,null,0,4);strokeLine(tbx,ty+th-2,tbx+tabW,ty+th-2,C.GOLD,2);}
+    drawText(tabs[i],FONTS.sm,i===game.selectedTab?C.GOLD:C.GRAY,tbx+tabW/2,ty+th/2,'center','middle');
+    if(mouse.clicked&&mouse.x>=tbx&&mouse.x<=tbx+tabW&&mouse.y>=ty&&mouse.y<=ty+th){game.selectedTab=i;consumeClick();}
+  }
+
+  if(game.selectedTab===0) drawBranchInfo(branch);
+  else if(game.selectedTab===1) drawBranchRecipe(branch);
+  else if(game.selectedTab===2) drawBranchStaff(branch);
+  else if(game.selectedTab===3) drawBranchMarketing(branch);
+  else if(game.selectedTab===4) drawBranchSupply(branch);
+}
+
+function drawBranchInfo(branch) {
+  const rx=430; let ry=130;
+  drawText(`🏪 ${branch.name}`,FONTS.lg,C.GOLD,rx,ry,'left','top'); ry+=40;
+  drawText(`📍 ${branch.city}, ${branch.country} (${branch.location_type})`,FONTS.sm,C.TEXT2,rx,ry,'left','top'); ry+=30;
+  const rows=[
+    ['Status:',branch.is_open?'GEÖFFNET ✓':'GESCHLOSSEN ✗',branch.is_open?C.GREEN:C.RED],
+    ['Öffnung:',`${String(branch.open_hour).padStart(2,'0')}:00 – ${String(branch.close_hour).padStart(2,'0')}:00`,C.TEXT],
+    ['Miete:',`${branch.rent.toFixed(0)}€/Monat`,C.RED2],
+    ['Fixkosten:',formatMoney(branch.monthlyFixedCosts()),C.RED2],
+    ['Tagesgewinn:',formatMoney(branch.daily_revenue),moneyColor(branch.daily_revenue)],
+    ['Kunden gesamt:',branch.total_customers.toLocaleString('de'),C.BLUE2],
+    ['Effizienz:',(branch.staffEfficiency*100).toFixed(0)+'% '+(branch.staffEfficiency>=1?'✓ Gut':branch.staffEfficiency<0.6?'⚠ Mehr Personal!':'~ OK'),branch.staffEfficiency>=1?C.GREEN:branch.staffEfficiency<0.6?C.RED:C.WARN],
+    ['Alter:',`${branch.age_days} Tage`,C.TEXT],
+  ];
+  for(const [l,v,vc] of rows){
+    drawText(l,FONTS.sm,C.TEXT2,rx,ry,'left','top');
+    drawText(v,FONTS.sm,vc,rx+820,ry,'right','top'); ry+=28;
+  }
+  ry+=8;
+  drawText('Hygiene:',FONTS.sm,C.TEXT2,rx,ry,'left','top');
+  const hc=branch.hygiene>=70?C.GREEN:branch.hygiene>=40?C.WARN:C.RED;
+  drawBar(rx+120,ry,300,22,branch.hygiene,100,hc,undefined,false);
+  drawText(`${branch.hygiene.toFixed(0)}%`,FONTS.sm,hc,rx+432,ry+3,'left','top'); ry+=34;
+  drawText('Reputation:',FONTS.sm,C.TEXT2,rx,ry,'left','top');
+  const rc=branch.reputation>=70?C.GREEN:branch.reputation>=40?C.WARN:C.RED;
+  drawBar(rx+120,ry,300,22,branch.reputation,100,rc,undefined,false);
+  drawText(`${branch.reputation.toFixed(0)}%`,FONTS.sm,rc,rx+432,ry+3,'left','top'); ry+=38;
+
+  const btnToggle=new Button(rx,ry,220,34,branch.is_open?'Filiale schließen':'Filiale öffnen',branch.is_open?C.RED:C.GREEN,C.WHITE,FONTS.sm);
+  btnToggle.draw(); if(btnToggle.update()) branch.is_open=!branch.is_open; ry+=44;
+  const btnClean=new Button(rx,ry,200,34,'🧹 Reinigen (-150€)',C.TEAL,C.BG,FONTS.sm);
+  btnClean.draw(); if(btnClean.update()){if(game.gs.money>=150){game.gs.money-=150;branch.hygiene=Math.min(100,branch.hygiene+20);game.gs.addNotif('Filiale gereinigt! +20 Hygiene','success');}else game.gs.addNotif('Zu wenig Geld!','danger');} ry+=44;
+
+  // Sauce popularity
+  ry+=8; drawText('🥫 Soßen-Beliebtheit:',FONTS.sm,C.GOLD,rx,ry,'left','top'); ry+=28;
+  const total=Math.max(1,Object.values(branch.sauce_popularity).reduce((a,b)=>a+b,0));
+  for(const [k,name] of Object.entries(SAUCE_NAMES)){
+    const cnt=branch.sauce_popularity[k]||0;
+    drawText(name+':',FONTS.xs,C.TEXT2,rx,ry,'left','top');
+    drawBar(rx+130,ry,250,14,cnt,total,C.ORANGE,undefined,false);
+    drawText(String(cnt),FONTS.xxs,C.TEXT,rx+390,ry,'left','top'); ry+=20;
+  }
+  // Events
+  if(branch.active_events.length){ry+=8;drawText('⚡ Aktive Ereignisse:',FONTS.sm,C.GOLD,rx,ry,'left','top');ry+=28;
+    for(const ev of branch.active_events) {drawText(`• ${ev.name} (noch ${ev.remaining||'?'} Tage)`,FONTS.xs,typeColor(ev.type),rx,ry,'left','top');ry+=20;}}
+}
+
+function drawBranchRecipe(branch) {
+  const rx=430; let ry=122;
+  // Recipe selector
+  for(let i=0;i<branch.recipes.length;i++){
+    const sel=i===game.selectedRecipe%branch.recipes.length;
+    fillRect(rx+i*90,ry,85,28,sel?C.GOLD:C.PANEL2,C.BORDER,1,4);
+    drawText(branch.recipes[i].name.slice(0,10),FONTS.xxs,sel?C.BG:C.TEXT,rx+i*90+43,ry+14,'center','middle');
+    if(mouse.clicked&&mouse.x>=rx+i*90&&mouse.x<=rx+i*90+85&&mouse.y>=ry&&mouse.y<=ry+28){game.selectedRecipe=i;consumeClick();}
+  } ry+=40;
+  const recipe=branch.recipes[game.selectedRecipe%branch.recipes.length];
+  drawText(`✏ Rezept: ${recipe.name}`,FONTS.md,C.GOLD,rx,ry,'left','top'); ry+=35;
+
+  // Price
+  drawText('Preis:',FONTS.sm,C.TEXT2,rx,ry,'left','top');
+  drawText(`${recipe.price.toFixed(2)}€`,FONTS.md,C.GOLD,rx+120,ry,'left','top');
+  const btnPdn=new Button(rx+270,ry,30,28,'-',C.RED,C.WHITE,FONTS.md);
+  const btnPup=new Button(rx+305,ry,30,28,'+',C.GREEN,C.BG,FONTS.md);
+  btnPdn.draw(); btnPup.draw();
+  if(btnPdn.update()) recipe.price=Math.max(0.5,+(recipe.price-0.5).toFixed(2));
+  if(btnPup.update()) recipe.price=+(recipe.price+0.5).toFixed(2);
+  const cost=recipe.ingredientCost(); const margin=recipe.price-cost;
+  drawText(`Kosten:${cost.toFixed(2)}€ Marge:${margin.toFixed(2)}€`,FONTS.xs,moneyColor(margin),rx+350,ry+6,'left','top'); ry+=35;
+
+  // Fleisch menge
+  drawText('Fleischmenge:',FONTS.sm,C.TEXT2,rx,ry,'left','top');
+  drawText(`x${recipe.fleisch_menge.toFixed(2)}`,FONTS.md,C.ORANGE,rx+160,ry,'left','top');
+  const btnFdn=new Button(rx+270,ry,30,28,'-',C.RED,C.WHITE,FONTS.md);
+  const btnFup=new Button(rx+305,ry,30,28,'+',C.GREEN,C.BG,FONTS.md);
+  btnFdn.draw(); btnFup.draw();
+  if(btnFdn.update()) recipe.fleisch_menge=Math.max(0.5,+(recipe.fleisch_menge-0.25).toFixed(2));
+  if(btnFup.update()) recipe.fleisch_menge=Math.min(3,+(recipe.fleisch_menge+0.25).toFixed(2)); ry+=35;
+
+  // Fleisch type
+  drawText('Fleischtyp:',FONTS.sm,C.TEXT2,rx,ry,'left','top'); ry+=28;
+  const btnFbasis=new Button(rx,ry,150,28,'Basis-Fleisch',recipe.fleisch==='fleisch_basis'?C.GOLD:C.PANEL2,C.TEXT,FONTS.xs);
+  const btnFprem=new Button(rx+160,ry,150,28,'Premium-Fleisch',recipe.fleisch==='fleisch_premium'?C.GOLD:C.PANEL2,C.TEXT,FONTS.xs);
+  btnFbasis.draw(); btnFprem.draw();
+  if(btnFbasis.update()) recipe.fleisch='fleisch_basis';
+  if(btnFprem.update()) recipe.fleisch='fleisch_premium'; ry+=40;
+
+  // Sosse
+  drawText('Soße:',FONTS.sm,C.TEXT2,rx,ry,'left','top'); ry+=28;
+  let si=0;
+  for(const [k,name] of Object.entries(SAUCE_NAMES)){
+    const bx=rx+(si%3)*120, by=ry+Math.floor(si/3)*38;
+    const btn=new Button(bx,by,115,30,name,recipe.sosse===k?C.ORANGE:C.PANEL2,C.TEXT,FONTS.xs);
+    btn.draw(); if(btn.update()) recipe.sosse=k; si++;
+  }
+  ry+=Math.ceil(Object.keys(SAUCE_NAMES).length/3)*38+5;
+
+  // Zutaten
+  drawText('Zutaten:',FONTS.sm,C.TEXT2,rx,ry,'left','top'); ry+=28;
+  const ingrs=[['salat','Salat'],['tomate','Tomate'],['zwiebel','Zwiebel'],['kraut','Kraut'],['gurke','Gurke']];
+  for(let i=0;i<ingrs.length;i++){
+    const [k,lbl]=ingrs[i]; const active=recipe[k];
+    const btn=new Button(rx+i*78,ry,74,28,lbl,active?C.GREEN:C.PANEL2,C.TEXT,FONTS.xxs);
+    btn.draw(); if(btn.update()) recipe[k]=!recipe[k];
+  } ry+=42;
+
+  // Quality
+  const q=recipe.qualityScore();
+  drawText(`Qualität: ${q.toFixed(1)}/10  |  Gewinn/Döner: ${recipe.profitMargin().toFixed(2)}€`,FONTS.sm,C.GOLD,rx,ry,'left','top');
+  drawBar(rx+290,ry,200,18,q,10,q>=7?C.GREEN:q>=5?C.WARN:C.RED,undefined,false); ry+=38;
+
+  if(branch.recipes.length<5){
+    const btnAdd=new Button(rx,ry,160,32,'+ Rezept hinzufügen',C.TEAL,C.BG,FONTS.xs);
+    btnAdd.draw(); if(btnAdd.update()){branch.recipes.push(new Recipe()); branch.recipes[branch.recipes.length-1].name=`Rezept ${branch.recipes.length}`; game.gs.addNotif('Neues Rezept hinzugefügt!','success');}
+  }
+}
+
+function drawBranchStaff(branch) {
+  const rx=430; let ry=130;
+  drawText('👥 Personalverwaltung',FONTS.md,C.GOLD,rx,ry,'left','top'); ry+=38;
+  drawText('Verfügbare Positionen (Klick = Einstellen):',FONTS.sm,C.TEXT2,rx,ry,'left','top'); ry+=30;
+  game.hireRects={};
+  for(const [stype,cfg] of Object.entries(STAFF_TYPES)){
+    fillRect(rx,ry,570,44,C.PANEL2,C.BORDER,1,6);
+    drawText(cfg.label,FONTS.sm,cfg.color,rx+10,ry+12,'left','top');
+    drawText(`Gehalt: ${cfg.salary}€/Mo${stype==='reiniger'?' | Hält Hygiene ≥80%':''}`,FONTS.xs,C.TEXT2,rx+220,ry+14,'left','top');
+    const hx=rx+580, hy=ry+7, hw=80, hh=30;
+    fillRect(hx,hy,hw,hh,game.gs.money>=cfg.salary?C.GREEN:C.GRAY2,null,0,5);
+    drawText('+ Hire',FONTS.xs,C.BG,hx+hw/2,hy+hh/2,'center','middle');
+    game.hireRects[stype]={x:hx,y:hy,w:hw,h:hh,salary:cfg.salary};
+    if(mouse.clicked&&mouse.x>=hx&&mouse.x<=hx+hw&&mouse.y>=hy&&mouse.y<=hy+hh){
+      consumeClick();
+      if(game.gs.money>=cfg.salary){game.gs.money-=cfg.salary;const s=new Staff(stype);branch.staff.push(s);game.gs.addNotif(`${s.name} eingestellt!`,'success');}
+      else game.gs.addNotif('Zu wenig Geld!','danger');
+    }
+    ry+=50;
+  }
+  ry+=10; drawText('Aktuelle Belegschaft:',FONTS.sm,C.GOLD,rx,ry,'left','top'); ry+=28;
+  game.fireRects=[];
+  if(!branch.staff.length){drawText('Keine Mitarbeiter!',FONTS.sm,C.GRAY,rx+100,ry,'left','top');}
+  else for(let i=0;i<branch.staff.length;i++){
+    const s=branch.staff[i];
+    fillRect(rx,ry,570,34,i%2===0?C.PANEL:C.BG2,null,0,4);
+    drawText(s.name,FONTS.xs,C.GOLD,rx+8,ry+9,'left','top');
+    drawText(STAFF_TYPES[s.stype]?.label||s.stype,FONTS.xxs,C.TEXT2,rx+180,ry+11,'left','top');
+    drawText(`Eff:${s.efficiency.toFixed(1)} Spd:${s.speed} Fr:${s.friendliness}`,FONTS.xxs,C.TEXT3,rx+280,ry+11,'left','top');
+    drawBar(rx+440,ry+11,80,12,s.morale,1,s.morale>0.6?C.GREEN:C.WARN,undefined,false);
+    const fx=rx+580,fy=ry+4,fw=70,fh=26;
+    fillRect(fx,fy,fw,fh,C.DARK_RED,null,0,4); drawText('Entlassen',FONTS.xxs,C.WHITE,fx+fw/2,fy+fh/2,'center','middle');
+    game.fireRects.push({x:fx,y:fy,w:fw,h:fh,idx:i});
+    if(mouse.clicked&&mouse.x>=fx&&mouse.x<=fx+fw&&mouse.y>=fy&&mouse.y<=fy+fh){
+      consumeClick(); const fired=branch.staff.splice(i,1)[0]; game.gs.addNotif(`${fired.name} entlassen.`,'warn'); break;
+    }
+    ry+=38;
+  }
+}
+
+function drawBranchMarketing(branch) {
+  const rx=430; let ry=130;
+  drawText('📢 Marketing-Management',FONTS.md,C.GOLD,rx,ry,'left','top'); ry+=38;
+  const mktg=[['flyer','🗞 Flyer',200,'+10% Kunden',C.ORANGE],['social_media','📱 Social Media',500,'+20% Kunden',C.BLUE],['influencer','⭐ Influencer',2000,'+35% Kunden',C.PURPLE],['stadion','🏟 Stadion',5000,'+50% Kunden',C.TEAL],['tv','📺 TV-Werbung',15000,'+80% Kunden',C.RED]];
+  for(const [key,lbl,cost,effect,col] of mktg){
+    const active=branch.marketing[key];
+    fillRect(rx,ry,700,48,active?lerpColor(C.PANEL2,col,0.15):C.PANEL2,active?col:C.BORDER,active?2:1,6);
+    drawText(lbl,FONTS.sm,col,rx+12,ry+14,'left','top');
+    drawText(`${cost}€/Monat | ${effect}`,FONTS.xs,C.TEXT2,rx+220,ry+16,'left','top');
+    drawText(active?'AKTIV ✓':'INAKTIV',FONTS.sm,active?C.GREEN:C.GRAY,rx+590,ry+14,'left','top');
+    const btn=new Button(rx+500,ry+8,90,32,active?'Deaktiv.':'Aktivieren',active?C.RED:C.GREEN,C.WHITE,FONTS.xs);
+    btn.draw(); if(btn.update()) branch.marketing[key]=!branch.marketing[key];
+    ry+=55;
+  }
+  ry+=10;
+  const tc=Object.entries(branch.marketing).filter(([,v])=>v).reduce((a,[k])=>a+{flyer:200,social_media:500,influencer:2000,stadion:5000,tv:15000}[k],0);
+  drawText(`Gesamt Marketing: ${tc}€/Monat`,FONTS.sm,C.ORANGE,rx,ry,'left','top'); ry+=28;
+  drawText(`Multiplikator: x${branch.marketingMultiplier.toFixed(2)}`,FONTS.sm,C.GOLD,rx,ry,'left','top');
+}
+
+function drawBranchSupply(branch) {
+  const rx=430; let ry=130;
+  drawText('🚚 Lieferketten-Management',FONTS.md,C.GOLD,rx,ry,'left','top'); ry+=38;
+  const allSuppliers=[
+    {cat:'fleisch',name:"Ahmet's Halal Fleisch",quality:7,reliability:8,price_mod:1.0},
+    {cat:'fleisch',name:'BioFleisch Premium GmbH',quality:9,reliability:7,price_mod:1.5},
+    {cat:'fleisch',name:'Billigfleisch Express',quality:3,reliability:6,price_mod:0.6},
+    {cat:'brot',name:'Bäckerei Müller',quality:8,reliability:9,price_mod:1.0},
+    {cat:'brot',name:'Industriebäckerei Schnell',quality:5,reliability:7,price_mod:0.7},
+    {cat:'gemuese',name:'Öztürk Gemüse',quality:8,reliability:8,price_mod:1.0},
+    {cat:'gemuese',name:'Bio-Garten Wagner',quality:9,reliability:7,price_mod:1.4},
+    {cat:'getraenke',name:'Cola & Co Vertrieb',quality:6,reliability:9,price_mod:1.0},
+  ];
+  const cats={fleisch:'🥩 Fleisch',brot:'🍞 Brot',gemuese:'🥗 Gemüse',getraenke:'🥤 Getränke'};
+  for(const [cat,catLbl] of Object.entries(cats)){
+    drawText(catLbl,FONTS.sm,C.GOLD,rx,ry,'left','top'); ry+=24;
+    for(const sup of allSuppliers.filter(s=>s.cat===cat)){
+      const active=branch.suppliers[cat]&&branch.suppliers[cat].name===sup.name;
+      fillRect(rx,ry,680,36,active?lerpColor(C.PANEL2,C.GREEN,0.15):C.PANEL2,active?C.GREEN:C.BORDER,1,4);
+      const qc=sup.quality>=7?C.GREEN:sup.quality>=5?C.WARN:C.RED;
+      const rc=sup.reliability>=7?C.GREEN:sup.reliability>=5?C.WARN:C.RED;
+      const pc=sup.price_mod<=1?C.GREEN:C.RED;
+      drawText(sup.name,FONTS.xs,C.TEXT,rx+8,ry+10,'left','top');
+      drawText(`Qual:${sup.quality}`,FONTS.xxs,qc,rx+240,ry+10,'left','top');
+      drawText(`Zuv:${sup.reliability}`,FONTS.xxs,rc,rx+300,ry+10,'left','top');
+      drawText(`x${sup.price_mod}`,FONTS.xxs,pc,rx+360,ry+10,'left','top');
+      const sx=rx+590,sy=ry+5,sw=80,sh=26;
+      fillRect(sx,sy,sw,sh,active?C.RED:C.GREEN,null,0,4);
+      drawText(active?'Ausgewählt':'Wählen',FONTS.xxs,C.BG,sx+sw/2,sy+sh/2,'center','middle');
+      if(mouse.clicked&&mouse.x>=sx&&mouse.x<=sx+sw&&mouse.y>=sy&&mouse.y<=sy+sh){
+        consumeClick();
+        if(active){delete branch.suppliers[cat];game.gs.addNotif('Lieferant abgewählt.','warn');}
+        else{branch.suppliers[cat]=sup;game.gs.addNotif(`Lieferant ${sup.name} ausgewählt!`,'success');}
+      }
+      ry+=40;
+    }
+    ry+=8;
+  }
+}
+
+function drawNewBranchDialog() {
+  const ns=game.newBranchState; const gs=game.gs;
+  ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(0,0,W,H);
+  const bx=W/2-260, by=160, bw=520, bh=500;
+  fillRect(bx,by,bw,bh,C.PANEL,C.GOLD,2,10);
+  drawText('Neue Filiale eröffnen',FONTS.lg,C.GOLD,W/2,by+25,'center','top');
+  drawText('ESC = Abbrechen',FONTS.xs,C.GRAY,W/2,by+55,'center','top');
+  const cursor=Math.floor(game.anim*2)%2===0?'|':'';
+
+  if(ns.phase==='name'){
+    drawText('1. Filialname:',FONTS.md,C.TEXT,W/2,by+90,'center','top');
+    fillRect(bx+30,by+120,bw-60,44,C.BG2,C.GOLD,1,6);
+    drawText(ns.name+cursor,FONTS.md,C.WHITE,bx+40,by+130,'left','top');
+    drawText('ENTER zum Bestätigen',FONTS.xs,C.GRAY,W/2,by+185,'center','top');
+    if(keyPressed==='Enter'&&ns.name.trim()){ns.phase='city';consumeKey();}
+    else if(keyPressed==='Escape'){game.newBranchState=null;consumeKey();}
+    else if(keyPressed==='Backspace'){ns.name=ns.name.slice(0,-1);consumeKey();}
+    else if(charTyped&&ns.name.length<30){ns.name+=charTyped;consumeKey();}
+  } else if(ns.phase==='city'){
+    drawText(`Name: ${ns.name}`,FONTS.sm,C.GOLD,W/2,by+85,'center','top');
+    drawText('2. Stadt:',FONTS.md,C.TEXT,W/2,by+115,'center','top');
+    fillRect(bx+30,by+150,bw-60,44,C.BG2,C.GOLD,1,6);
+    drawText(ns.city+cursor,FONTS.md,C.WHITE,bx+40,by+160,'left','top');
+    drawText('ENTER zum Bestätigen',FONTS.xs,C.GRAY,W/2,by+215,'center','top');
+    if(keyPressed==='Enter'&&ns.city.trim()){ns.phase='country';consumeKey();}
+    else if(keyPressed==='Escape'){game.newBranchState=null;consumeKey();}
+    else if(keyPressed==='Backspace'){ns.city=ns.city.slice(0,-1);consumeKey();}
+    else if(charTyped&&ns.city.length<30){ns.city+=charTyped;consumeKey();}
+  } else if(ns.phase==='country'){
+    drawText(`${ns.name} | ${ns.city}`,FONTS.sm,C.GOLD,W/2,by+85,'center','top');
+    drawText('3. Land:',FONTS.md,C.TEXT,W/2,by+115,'center','top');
+    fillRect(bx+30,by+150,bw-60,44,C.BG2,C.GOLD,1,6);
+    drawText(ns.country+cursor,FONTS.md,C.WHITE,bx+40,by+160,'left','top');
+    drawText('ENTER (Standard: Deutschland)',FONTS.xs,C.GRAY,W/2,by+215,'center','top');
+    if(keyPressed==='Enter'){ns.phase='type';consumeKey();}
+    else if(keyPressed==='Escape'){game.newBranchState=null;consumeKey();}
+    else if(keyPressed==='Backspace'){ns.country=ns.country.slice(0,-1);consumeKey();}
+    else if(charTyped&&ns.country.length<40){ns.country+=charTyped;consumeKey();}
+  } else if(ns.phase==='type'){
+    drawText(`${ns.name} | ${ns.city}, ${ns.country}`,FONTS.sm,C.GOLD,W/2,by+85,'center','top');
+    drawText('4. Standorttyp wählen:',FONTS.md,C.TEXT,W/2,by+112,'center','top');
+    let li=0;
+    for(const [lt,cfg] of Object.entries(LOCATION_TYPES)){
+      const r={x:bx+30,y:by+148+li*62,w:bw-60,h:55};
+      const cost=cfg.rent*3; const canAfford=gs.money>=cost;
+      const col=canAfford?C.GOLD:C.RED;
+      fillRect(r.x,r.y,r.w,r.h,lerpColor(C.PANEL2,col,0.1),col,1,6);
+      drawText(cfg.label,FONTS.sm,col,r.x+12,r.y+r.h/2-10,'left','middle');
+      drawText(`Miete:${cfg.rent}€/Mo | Setup:${cost.toFixed(0)}€ | ~${cfg.foot_traffic} Kunden/h`,FONTS.xxs,C.TEXT2,r.x+12,r.y+r.h/2+8,'left','middle');
+      if(!canAfford) drawText('Nicht genug Geld!',FONTS.xxs,C.RED,r.x+r.w-12,r.y+r.h/2,'right','middle');
+      if(mouse.clicked&&mouse.x>=r.x&&mouse.x<=r.x+r.w&&mouse.y>=r.y&&mouse.y<=r.y+r.h){
+        consumeClick();
+        if(canAfford){gs.openBranch(ns.name,lt,ns.city,ns.country);game.newBranchState=null;}
+        else gs.addNotif(`Zu wenig Geld! Benötigt:${cost.toFixed(0)}€`,'danger');
+      }
+      li++;
+    }
+    if(keyPressed==='Escape'){game.newBranchState=null;consumeKey();}
+  }
+}
+
+function drawModal() {
+  const m=game.modal; if(!m) return;
+  ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(0,0,W,H);
+  const bw=500,bh=200,bx=W/2-bw/2,by=H/2-bh/2;
+  fillRect(bx,by,bw,bh,C.PANEL,C.GOLD,2,10);
+  drawText(m.title,FONTS.lg,C.GOLD,W/2,by+30,'center','top');
+  drawText(m.msg,FONTS.sm,C.WHITE,W/2,by+80,'center','top',460);
+  const bwBtn=120,gap=16,total=m.btns.length*bwBtn+(m.btns.length-1)*gap;
+  const startX=W/2-total/2;
+  for(let i=0;i<m.btns.length;i++){
+    const bd=m.btns[i];
+    const btn=new Button(startX+i*(bwBtn+gap),by+140,bwBtn,36,bd.label,bd.color,C.WHITE,FONTS.sm);
+    btn.draw();
+    if(btn.update()){
+      if(bd.result==='close'&&game.selectedBranch>=0){game.gs.closeBranch(game.selectedBranch);game.selectedBranch=-1;}
+      game.modal=null;
+    }
+  }
+}
+
+
+// ─── RESEARCH SCREEN ───
+const RESEARCH_POS = {
+  schnittmaschine:  [150,200], premium_zutaten:[150,380], ki_kasse:[380,200],
+  schnelle_lieferung:[380,380], eigene_logistik:[610,380], franchise:[610,200],
+  brotfabrik:[840,380], fleischproduktion:[840,540], solar_energie:[150,540],
+  loyalty_app:[380,540], geheimrezept:[610,540], mega_grill:[840,200],
+};
+const NODE_SIZE=80;
+
+function drawResearch() {
+  const gs=game.gs; const y0=85;
+  drawText('🔬 Forschung & Entwicklung',FONTS.lg,C.GOLD,20,y0,'left','top');
+
+  if(gs.active_research){
+    const node=gs.research_tree[gs.active_research];
+    drawText(`Aktive Forschung: ${node.name} [${Math.floor(node.progress*100)}%]`,FONTS.sm,C.TEAL,W-20,y0+5,'right','top');
+    drawBar(W-400,y0+28,380,12,node.progress,1,C.TEAL,undefined,false);
+  }
+
+  // Connections
+  for(const [nid,node] of Object.entries(gs.research_tree)){
+    if(!RESEARCH_POS[nid]) continue;
+    const [nx,ny]=RESEARCH_POS[nid];
+    for(const req of node.req){
+      if(!RESEARCH_POS[req]) continue;
+      const [rx2,ry2]=RESEARCH_POS[req];
+      const reqNode=gs.research_tree[req];
+      strokeLine(rx2+30,ry2+y0-85+85,nx-30,ny+y0-85+85,reqNode.unlocked?C.GREEN:C.GRAY2,2);
+    }
+  }
+
+  let hoveredNode=null;
+  for(const [nid,node] of Object.entries(gs.research_tree)){
+    if(!RESEARCH_POS[nid]) continue;
+    const [nx,ny2]=RESEARCH_POS[nid];
+    const ny=ny2+y0-85+85;
+    const ns=NODE_SIZE;
+    const hovered=mouse.x>=nx-ns/2&&mouse.x<=nx+ns/2&&mouse.y>=ny-ns/2&&mouse.y<=ny+ns/2;
+    if(hovered) hoveredNode=nid;
+
+    let bg,border;
+    if(node.unlocked){bg=lerpColor(C.GREEN,C.BG,0.5);border=C.GREEN;}
+    else if(node.researching){const t=Math.abs(Math.sin(game.anim*2));bg=lerpColor(C.TEAL,C.BG,0.4+t*0.2);border=C.TEAL;}
+    else if(node.req.some(r=>!gs.research_tree[r].unlocked)){bg=C.BG2;border=C.GRAY2;}
+    else{bg=C.PANEL;border=hovered?C.GOLD:C.BORDER;}
+
+    fillRect(nx-ns/2,ny-ns/2,ns,ns,bg,border,2,8);
+    const icon=node.unlocked?'✓':node.researching?`${Math.floor(node.progress*100)}%`:'🔬';
+    const ic=node.unlocked?C.GREEN:node.researching?C.TEAL:C.GRAY;
+    drawText(icon,FONTS.sm,ic,nx,ny-16,'center','top');
+    const shortName=node.name.length>14?node.name.slice(0,12)+'..':node.name;
+    const words=shortName.split(' ');
+    for(let li=0;li<Math.min(2,words.length);li++) drawText(words[li],FONTS.xxs,C.TEXT,nx,ny+4+li*14,'center','top');
+    if(hovered) drawText(`${formatMoney(node.cost)} | ${node.dur}T`,FONTS.xxs,C.GOLD,nx,ny+46,'center','top');
+
+    if(hovered&&mouse.clicked){consumeClick();gs.startResearch(nid);}
+  }
+
+  // Tooltip
+  if(hoveredNode){
+    const node=gs.research_tree[hoveredNode];
+    const tw=320,th=105;
+    const tx=Math.min(mouse.x+15,W-tw-5), ty=Math.min(mouse.y+15,H-th-5);
+    fillRect(tx,ty,tw,th,C.PANEL,C.GOLD,1,8);
+    drawText(node.name,FONTS.sm,C.GOLD,tx+10,ty+10,'left','top');
+    ctx.font=FONTS.xs; ctx.fillStyle=C.TEXT; ctx.textAlign='left'; ctx.textBaseline='top';
+    // word wrap desc
+    const maxW=300; const words2=node.desc.split(' '); let line2='';
+    const lines2=[]; for(const w of words2){const t=line2?line2+' '+w:w;if(ctx.measureText(t).width>maxW&&line2){lines2.push(line2);line2=w;}else line2=t;} if(line2)lines2.push(line2);
+    for(let i=0;i<lines2.length;i++) drawText(lines2[i],FONTS.xs,C.TEXT,tx+10,ty+35+i*16,'left','top');
+    const status=node.unlocked?'✓ Abgeschlossen':node.researching?`In Bearbeitung ${Math.floor(node.progress*100)}%`:`Kosten: ${formatMoney(node.cost)} | ${node.dur} Tage`;
+    drawText(status,FONTS.xs,node.unlocked?C.GREEN:C.GOLD,tx+10,ty+80,'left','top');
+  }
+
+  // Legend
+  let ly=H-58;
+  for(const [col,lbl] of [[C.GREEN,'Abgeschlossen'],[C.TEAL,'In Bearbeitung'],[C.GOLD,'Verfügbar'],[C.GRAY2,'Gesperrt']]){
+    fillCirc(20,ly+8,6,col); drawText(lbl,FONTS.xxs,C.TEXT2,32,ly+2,'left','top'); ly+=18;
+  }
+}
+
+// ─── STATISTICS SCREEN ───
+function drawStats() {
+  const gs=game.gs; const y0=85;
+  drawText('📊 Statistiken & Analysen',FONTS.lg,C.GOLD,20,y0,'left','top');
+
+  const cw=390, ch=140;
+  const charts=[[gs.revenue_history,'Tagesgewinn',C.GREEN,20,y0+45],[gs.customer_history.map(v=>v),'Kunden/Tag',C.BLUE,430,y0+45],[gs.expense_history,'Tagesausgaben',C.RED,840,y0+45]];
+  for(const [data,lbl,col,cx,cy] of charts){
+    fillRect(cx,cy,cw,ch+30,C.PANEL,C.BORDER,1,8);
+    drawText(lbl,FONTS.sm,col,cx+10,cy+10,'left','top');
+    miniChart(data,cx+8,cy+35,cw-16,ch-10,col);
+  }
+
+  // Branch table
+  const ty=y0+230;
+  fillRect(20,ty,1240,260,C.PANEL,C.BORDER,1,8);
+  drawText('🏪 Filial-Performance',FONTS.md,C.GOLD,30,ty+12,'left','top');
+  const hdrs=['Filiale','Stadt','Kunden','Umsatz','Hygiene','Reputation','Status'];
+  const colX=[30,200,360,470,600,720,860];
+  for(let i=0;i<hdrs.length;i++) drawText(hdrs[i],FONTS.sm,C.GOLD,colX[i],ty+38,'left','top');
+  strokeLine(25,ty+56,1255,ty+56,C.BORDER,1);
+  const sorted=[...gs.branches].sort((a,b)=>b.total_revenue-a.total_revenue).slice(0,6);
+  for(let i=0;i<sorted.length;i++){
+    const b=sorted[i]; const ry=ty+62+i*32;
+    fillRect(25,ry-2,1230,30,i%2===0?C.PANEL:C.BG2,null,0,3);
+    const vals=[[b.name.slice(0,16),C.TEXT],[b.city.slice(0,14),C.TEXT2],[b.total_customers.toLocaleString('de'),C.BLUE2],[formatMoney(b.total_revenue),C.GREEN],[b.hygiene.toFixed(0)+'%',b.hygiene>=70?C.GREEN:b.hygiene>=40?C.WARN:C.RED],[b.reputation.toFixed(0)+'%',b.reputation>=70?C.GREEN:b.reputation>=40?C.WARN:C.RED],[b.is_open?'OFFEN':'ZU',b.is_open?C.GREEN:C.RED]];
+    for(let j=0;j<vals.length;j++) drawText(vals[j][0],FONTS.xs,vals[j][1],colX[j],ry+6,'left','top');
+  }
+
+  // Sauce stats
+  const sy=y0+510;
+  fillRect(20,sy,400,170,C.PANEL,C.BORDER,1,8);
+  drawText('🥫 Beliebteste Soßen',FONTS.sm,C.GOLD,30,sy+12,'left','top');
+  const totSauce={};
+  for(const b of gs.branches) for(const [k,v] of Object.entries(b.sauce_popularity)) totSauce[k]=(totSauce[k]||0)+v;
+  const maxCnt=Math.max(1,...Object.values(totSauce));
+  let si2=0;
+  for(const [k,name] of Object.entries(SAUCE_NAMES)){
+    const cnt=totSauce[k]||0; const ry=sy+38+si2*24;
+    drawText(name+':',FONTS.xs,C.TEXT2,30,ry,'left','top');
+    drawBar(140,ry,200,16,cnt,maxCnt,C.ORANGE,undefined,false);
+    drawText(String(cnt),FONTS.xxs,C.TEXT,350,ry+2,'left','top'); si2++;
+  }
+
+  // KPIs
+  fillRect(440,sy,400,170,C.PANEL,C.BORDER,1,8);
+  drawText('🏢 Unternehmenskennzahlen',FONTS.sm,C.GOLD,450,sy+12,'left','top');
+  const kpis=[['Filialen:',String(gs.branches.length)],['Gesamtkunden:',gs.total_customers_served.toLocaleString('de')],['Gesamtumsatz:',formatMoney(gs.total_revenue)],['Länder:',String(gs.countries_present.size)],['Spieltage:',String(gs.day)]];
+  for(let i=0;i<kpis.length;i++){
+    drawText(kpis[i][0],FONTS.xs,C.TEXT2,450,sy+40+i*24,'left','top');
+    drawText(kpis[i][1],FONTS.sm,C.GOLD,830,sy+38+i*24,'right','top');
+  }
+
+  // Competitors
+  fillRect(860,sy,380,170,C.PANEL,C.BORDER,1,8);
+  drawText('⚔ Konkurrenz',FONTS.sm,C.GOLD,870,sy+12,'left','top');
+  if(gs.competitors.length) for(let i=0;i<Math.min(5,gs.competitors.length);i++){
+    const c=gs.competitors[i]; const ry=sy+38+i*24;
+    drawText(c.name.slice(0,20),FONTS.xxs,c.color,870,ry,'left','top');
+    drawText(`Marktanteil: ${(c.market_share*100).toFixed(1)}%`,FONTS.xxs,C.TEXT2,1080,ry,'left','top');
+  } else drawText('Noch keine Konkurrenz!',FONTS.sm,C.GRAY,1050,sy+90,'center','middle');
+}
+
+// ─── FINANCE SCREEN ───
+function drawFinance() {
+  const gs=game.gs; const y0=85;
+  drawText('💰 Finanzübersicht',FONTS.lg,C.GOLD,20,y0,'left','top');
+  const boxes=[['Kapital',formatMoney(gs.money),moneyColor(gs.money)],['Gesamtumsatz',formatMoney(gs.total_revenue),C.GREEN],['Gesamtausgaben',formatMoney(gs.total_expenses),C.RED2],['Nettogewinn',formatMoney(gs.total_revenue-gs.total_expenses),moneyColor(gs.total_revenue-gs.total_expenses)]];
+  for(let i=0;i<boxes.length;i++){
+    const bx=20+i*310;
+    fillRect(bx,y0+45,295,80,C.PANEL,C.BORDER,1,8);
+    drawText(boxes[i][0],FONTS.sm,C.TEXT2,bx+12,y0+55,'left','top');
+    drawText(boxes[i][1],FONTS.lg,boxes[i][2],bx+148,y0+75,'center','middle');
+  }
+
+  // Revenue/expense chart
+  const cy=y0+150;
+  fillRect(20,cy,820,180,C.PANEL,C.BORDER,1,8);
+  drawText('📈 Gewinn vs Ausgaben (30 Tage)',FONTS.sm,C.GOLD,30,cy+12,'left','top');
+  const cr=[30,cy+38,800,130];
+  fillRect(cr[0],cr[1],cr[2],cr[3],C.BG2,null,0,4);
+  const allVals=[...gs.revenue_history,...gs.expense_history].filter(v=>v>0);
+  const maxV=Math.max(1,...allVals);
+  function drawFinLine(data,col){
+    const pts=[];
+    for(let i=0;i<data.length;i++){if(data[i]<=0)continue;const px=cr[0]+Math.round(i/29*(cr[2]-8))+4;const py=cr[1]+cr[3]-4-Math.round(data[i]/maxV*(cr[3]-12));pts.push([px,py]);}
+    if(pts.length>=2){ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();}
+  }
+  drawFinLine(gs.revenue_history,C.GREEN); drawFinLine(gs.expense_history,C.RED);
+  drawText('— Gewinn',FONTS.xxs,C.GREEN,cr[0]+cr[2]-10,cy+40,'right','top');
+  drawText('— Ausgaben',FONTS.xxs,C.RED,cr[0]+cr[2]-10,cy+55,'right','top');
+
+  // Per-branch table
+  const ty=y0+350;
+  fillRect(20,ty,820,290,C.PANEL,C.BORDER,1,8);
+  drawText('🏪 Filialkosten',FONTS.md,C.GOLD,30,ty+12,'left','top');
+  const hdrs2=['Filiale','Miete','Personal','Marketing','Fixkosten','Monatsgew.'];
+  const hx=[30,180,310,440,560,660];
+  for(let i=0;i<hdrs2.length;i++) drawText(hdrs2[i],FONTS.xs,C.GOLD,hx[i],ty+36,'left','top');
+  strokeLine(25,ty+52,835,ty+52,C.BORDER,1);
+  const sortedB=[...gs.branches].sort((a,b)=>b.monthlyFixedCosts()-a.monthlyFixedCosts()).slice(0,7);
+  let totRent=0,totStaff=0,totMktg=0;
+  for(let i=0;i<sortedB.length;i++){
+    const b=sortedB[i]; const ry=ty+58+i*32;
+    const rent=b.rent; const staff=b.staff.reduce((a,s)=>a+s.salary,0);
+    const mktg=Object.entries(b.marketing).filter(([,v])=>v).reduce((a,[k])=>a+{flyer:200,social_media:500,influencer:2000,stadion:5000,tv:15000}[k],0);
+    const total=rent+staff+mktg; const profit=b.daily_revenue*30-total;
+    totRent+=rent; totStaff+=staff; totMktg+=mktg;
+    fillRect(25,ry-2,810,28,i%2===0?C.PANEL:C.BG2,null,0,3);
+    const vals2=[[b.name.slice(0,14),C.TEXT],[`${rent.toFixed(0)}€`,C.RED2],[`${staff.toFixed(0)}€`,C.RED2],[`${mktg.toFixed(0)}€`,C.ORANGE],[`${total.toFixed(0)}€`,C.RED],[formatMoney(profit),moneyColor(profit)]];
+    for(let j=0;j<vals2.length;j++) drawText(vals2[j][0],FONTS.xxs,vals2[j][1],hx[j],ry+6,'left','top');
+  }
+
+  // Loan panel
+  const lx=860,lyl=y0+150;
+  fillRect(lx,lyl,380,200,C.PANEL,C.BORDER,1,8);
+  drawText('🏦 Kreditoption',FONTS.sm,C.GOLD,lx+10,lyl+12,'left','top');
+  drawText('Sofortkredit: 10.000€ | Zinsen: 5%/Mo',FONTS.sm,C.TEXT,lx+10,lyl+45,'left','top');
+  const dc=gs.loan_debt>0?C.RED:C.TEXT2;
+  drawText(`Schulden: ${gs.loan_debt.toFixed(0)}€  Rate: ${gs.loan_monthly_payment.toFixed(0)}€/Mo`,FONTS.xs,dc,lx+10,lyl+75,'left','top');
+  const btnL10=new Button(lx+10,lyl+100,160,36,'10K€ Kredit',C.TEAL,C.BG,FONTS.sm);
+  const btnL50=new Button(lx+10,lyl+145,160,36,'50K€ Kredit',C.BLUE,C.BG,FONTS.sm);
+  btnL10.draw(); btnL50.draw();
+  if(btnL10.update()){gs.money+=10000;gs.loan_debt+=10000;gs.loan_monthly_payment+=500;gs.addNotif('10.000€ Kredit aufgenommen! +500€ Zinsen/Mo','warn');}
+  if(btnL50.update()){gs.money+=50000;gs.loan_debt+=50000;gs.loan_monthly_payment+=2500;gs.addNotif('50.000€ Kredit aufgenommen! +2500€ Zinsen/Mo','warn');}
+}
+
+// ─── OPTIONS SCREEN ───
+function drawOptions() {
+  const gs=game.gs; const y0=85;
+  drawText('⚙ Optionen',FONTS.lg,C.GOLD,W/2,y0+20,'center','top');
+  const cx=W/2;
+  drawText('Spielgeschwindigkeit:',FONTS.sm,C.TEXT2,cx-160,155,'left','top');
+  for(let i=0;i<4;i++){
+    const [lbl,spd]=[['1x',1.0],['2x',3.0],['4x',8.0],['8x',16.0]][i];
+    const rx=cx-160+i*80, ry=178;
+    const active=gs.game_speed===spd;
+    fillRect(rx,ry,74,30,active?C.GOLD:C.PANEL2,active?C.GOLD:C.BORDER,1,5);
+    drawText(lbl,FONTS.sm,active?C.BG:C.TEXT,rx+37,ry+15,'center','middle');
+    if(mouse.clicked&&mouse.x>=rx&&mouse.x<=rx+74&&mouse.y>=ry&&mouse.y<=ry+30){gs.game_speed=spd;consumeClick();}
+  }
+
+  const btnSave0=new Button(cx-160,215,300,50,'Spiel speichern (Slot 1)',C.GOLD,C.BG);
+  const btnSave1=new Button(cx-160,275,300,50,'Spiel speichern (Slot 2)',C.ORANGE,C.BG);
+  const btnSave2=new Button(cx-160,335,300,50,'Spiel speichern (Slot 3)',C.TEAL,C.BG);
+  const btnMenu=new Button(cx-160,415,300,50,'Zurück zum Hauptmenü',C.RED,C.WHITE);
+  [btnSave0,btnSave1,btnSave2,btnMenu].forEach(b=>b.draw());
+  if(btnSave0.update()) gs.save(0);
+  if(btnSave1.update()) gs.save(1);
+  if(btnSave2.update()) gs.save(2);
+  if(btnMenu.update()){game.inGame=false;game.setScreen('main_menu');}
+
+  // Tips
+  fillRect(W-450,200,420,360,C.PANEL,C.BORDER,1,8);
+  drawText('💡 Spieltipps',FONTS.md,C.GOLD,W-240,218,'center','top');
+  const tips=['Eröffne zuerst in Kleinstädten,','bevor du in Großstädte gehst.','','Stelle Dönermeister + Azubi ein.','','Forsche früh in Schnittmaschine.','','Hygiene verfällt täglich – reinige','regelmäßig oder stelle Reiniger ein.','','Social Media lohnt sich ab Tag 1!','','Spare für Premium-Zutaten-Forschung.'];
+  for(let i=0;i<tips.length;i++) drawText(tips[i],FONTS.xs,C.TEXT2,W-440,248+i*20,'left','top');
+}
+
+// ─── ACHIEVEMENTS SCREEN ───
+function drawAchievements() {
+  const gs=game.gs;
+  drawText('Achievements',FONTS.lg,C.GOLD,W/2,85,'center','top');
+  const unlocked=ACHIEVEMENTS.filter(a=>gs.unlocked_achievements.has(a.id));
+  drawText(`${unlocked.length} / ${ACHIEVEMENTS.length} freigeschaltet`,FONTS.sm,C.TEXT2,W/2,125,'center','top');
+
+  const cols=2, cw=(W-60)/cols, ch=72, gap=10;
+  const startY=150-game.achScroll;
+  const all=[...unlocked,...ACHIEVEMENTS.filter(a=>!gs.unlocked_achievements.has(a.id))];
+  const totalRows=Math.ceil(all.length/cols);
+  const maxScroll=Math.max(0,totalRows*(ch+gap)-(H-210));
+  // scroll via mouse
+  if(mouse.y>145&&mouse.y<H-65&&game.screen==='achievements'){
+    // handled in scroll event below
+  }
+
+  ctx.save(); ctx.beginPath(); ctx.rect(0,145,W,H-210); ctx.clip();
+  for(let i=0;i<all.length;i++){
+    const col2=i%cols, row=Math.floor(i/cols);
+    const cx2=20+col2*(cw+gap), cy2=startY+row*(ch+gap);
+    if(cy2+ch<145||cy2>H-65) continue;
+    const done=gs.unlocked_achievements.has(all[i].id);
+    fillRect(cx2,cy2,cw,ch,done?lerpColor(C.PANEL,C.GOLD,0.1):C.PANEL,done?C.GOLD:C.PANEL2,2,8);
+    drawText(all[i].icon,FONTS.lg,done?C.GOLD:C.GRAY,cx2+36,cy2+ch/2,'center','middle');
+    drawText(all[i].name,FONTS.sm,done?C.GOLD:C.TEXT2,cx2+62,cy2+14,'left','top');
+    drawText(all[i].desc,FONTS.xs,done?C.TEXT2:C.GRAY,cx2+62,cy2+38,'left','top');
+    if(done) drawText('✓',FONTS.md,C.GREEN,cx2+cw-18,cy2+ch/2,'center','middle');
+  }
+  ctx.restore();
+
+  const btnBack=new Button(W/2-80,H-52,160,40,'← Zurück',C.PANEL2,C.TEXT);
+  btnBack.draw(); if(btnBack.update()) game.setScreen(game.prevScreen||'overview');
+  if(keyPressed==='Escape'){game.setScreen(game.prevScreen||'overview');consumeKey();}
+}
+
+// ─── MAIN LOOP ───
+let lastTime=0;
+
+function update(dt) {
+  game.anim+=dt;
+  // Particles (main menu only)
+  if(game.screen==='main_menu') for(const p of game.particles){
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.life+=dt;
+    if(p.life>=p.maxLife||p.y<-10) Object.assign(p,game.makeParticle(),{y:H+10});
+  }
+  // Scroll: branch list
+  if(game.screen==='branches'||game.screen==='staff'){
+    const gs=game.gs; const lh=575, itemH=60;
+    const totalH=gs.branches.length*itemH;
+    if(totalH>lh) {
+      if(keys['ArrowUp']&&mouse.x<420) game.branchScroll=Math.max(0,game.branchScroll-5);
+      if(keys['ArrowDown']&&mouse.x<420) game.branchScroll=Math.min(totalH-lh,game.branchScroll+5);
+    }
+  }
+  if(game.screen==='achievements'){
+    const cols=2,ch=72,gap=10;
+    const totalRows=Math.ceil(ACHIEVEMENTS.length/cols);
+    const maxScroll=Math.max(0,totalRows*(ch+gap)-(H-210));
+    if(keys['ArrowUp']) game.achScroll=Math.max(0,game.achScroll-5);
+    if(keys['ArrowDown']) game.achScroll=Math.min(maxScroll,game.achScroll+5);
+  }
+
+  if(game.inGame){
+    game.gs.advanceTime(dt);
+    game.gs.tickNotifs(dt);
+  }
+  tickToasts(dt);
+}
+
+// Scroll wheel
+window.addEventListener('wheel', e => {
+  if(game.screen==='achievements'){
+    const cols=2,ch=72,gap=10;
+    const totalRows=Math.ceil(ACHIEVEMENTS.length/cols);
+    const maxScroll=Math.max(0,totalRows*(ch+gap)-(H-210));
+    game.achScroll=Math.max(0,Math.min(maxScroll,game.achScroll+e.deltaY*0.5));
+  }
+  if((game.screen==='branches'||game.screen==='staff')&&mouse.x<420){
+    const gs=game.gs; const lh=575,itemH=60;
+    const totalH=gs.branches.length*itemH;
+    if(totalH>lh) game.branchScroll=Math.max(0,Math.min(totalH-lh,game.branchScroll+e.deltaY*0.5));
+  }
+},{passive:true});
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  fillRect(0,0,W,H,C.BG);
+
+  if(!game.inGame){
+    if(game.screen==='main_menu') drawMainMenu();
+    else if(game.screen==='difficulty') drawDifficulty();
+    else if(game.screen==='load_menu') drawLoadMenu();
+    else drawMainMenu();
+    drawToasts();
+    return;
+  }
+
+  drawHUD();
+  ctx.save(); ctx.beginPath(); ctx.rect(0,78,W,H-78); ctx.clip();
+  if(game.screen==='overview') drawOverview();
+  else if(game.screen==='branches'||game.screen==='staff') drawBranches();
+  else if(game.screen==='research') drawResearch();
+  else if(game.screen==='stats') drawStats();
+  else if(game.screen==='finance') drawFinance();
+  else if(game.screen==='options') drawOptions();
+  else if(game.screen==='achievements') drawAchievements();
+  else drawOverview();
+  ctx.restore();
+
+  // FPS (optional, bottom left)
+  // fps display removed
+  drawToasts();
+}
+
+function loop(ts) {
+  const dt=Math.min((ts-lastTime)/1000,0.1);
+  lastTime=ts;
+  update(dt);
+  draw();
+  // Reset per-frame input
+  mouse.clicked=false; mouse.released=false;
+  keyPressed=null; charTyped='';
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(ts=>{ lastTime=ts; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>
