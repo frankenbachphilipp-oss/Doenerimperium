@@ -793,23 +793,28 @@ const game = {
     this.inGame=true; this.selectedBranch=0; this.setScreen('overview');
   },
   loadGame(slot) {
-    // Trigger file picker
     const input=document.createElement('input');
     input.type='file'; input.accept='.txt,.json';
+    input.style.cssText='position:fixed;top:-999px;left:-999px;opacity:0;';
     input.onchange=e=>{
-      const file=e.target.files[0]; if(!file) return;
+      const file=e.target.files[0];
+      if(!file){document.body.removeChild(input);return;}
       const reader=new FileReader();
       reader.onload=ev=>{
+        document.body.removeChild(input);
         try{
           const gs=GameState.fromObj(JSON.parse(ev.target.result));
           game.gs=gs; gs.addNotif(`Spiel geladen! Tag ${gs.day}`,'success');
           game.inGame=true; game.selectedBranch=gs.branches.length?0:-1;
           game.setScreen('overview');
-        }catch(err){ addToast('Ungültige Speicherdatei!','danger'); }
+        }catch(err){ addToast('Ungültige Speicherdatei! Ist das wirklich ein DÖNERIMPERIUM-Save?','danger'); }
       };
       reader.readAsText(file);
     };
-    document.body.appendChild(input); input.click(); document.body.removeChild(input);
+    // Remove if user cancels without picking
+    input.addEventListener('cancel',()=>{ try{document.body.removeChild(input);}catch(e){} });
+    document.body.appendChild(input);
+    input.click();
   }
 };
 game.init();
