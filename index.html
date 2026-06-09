@@ -636,7 +636,7 @@ class GameState {
     for(const b of this.branches) b.tickDay(d.hd,d.md);
     if(this.day%60===0&&this.branches.length) this._maybeAddCompetitor();
     if(this.money<-50000) this.addNotif('BANKROTT! Du bist pleite! Spiel verloren!','danger');
-    if(this.day%7===0) { try{this.save('auto');}catch(e){} }
+
   }
   _processMonthly() {
     if(this.loan_monthly_payment>0){
@@ -715,18 +715,19 @@ class GameState {
   tickNotifs(dt) { for(const n of this.notifications) n.age+=dt; }
   save(slot) {
     const obj=this.toObj();
-    localStorage.setItem(`doenerimperium_${slot}`,JSON.stringify(obj));
-    this.addNotif(`Spiel gespeichert (Slot ${slot+1})!`,'success');
+    const json=JSON.stringify(obj,null,2);
+    const blob=new Blob([json],{type:'text/plain'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    const day=this.day, name=(this.company_name||'save').replace(/[^a-z0-9]/gi,'_').slice(0,20);
+    a.download=`doenermimperium_${name}_Tag${day}.txt`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    this.addNotif('Spielstand als .txt heruntergeladen!','success');
   }
-  static load(slot) {
-    const data=localStorage.getItem(`doenerimperium_${slot}`);
-    if(!data) return null;
-    try{return GameState.fromObj(JSON.parse(data));}catch(e){return null;}
-  }
-  static saveExists(slot) {
-    if(slot==='auto') return !!localStorage.getItem('doenerimperium_auto');
-    return !!localStorage.getItem(`doenerimperium_${slot}`);
-  }
+  static load(slot) { return null; }
+  static saveExists(slot) { return false; }
   toObj() {
     return {version:'1.0',money:this.money,day:this.day,hour:this.hour,minute:this.minute,tick:this.tick,
       company_name:this.company_name,total_revenue:this.total_revenue,total_expenses:this.total_expenses,
@@ -792,9 +793,23 @@ const game = {
     this.inGame=true; this.selectedBranch=0; this.setScreen('overview');
   },
   loadGame(slot) {
-    const gs=GameState.load(slot);
-    if(gs){this.gs=gs;gs.addNotif(`Spiel geladen! Tag ${gs.day}`,'success');this.inGame=true;this.selectedBranch=gs.branches.length?0:-1;this.setScreen('overview');}
-    else addToast('Kein Spielstand in diesem Slot!','danger');
+    // Trigger file picker
+    const input=document.createElement('input');
+    input.type='file'; input.accept='.txt,.json';
+    input.onchange=e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        try{
+          const gs=GameState.fromObj(JSON.parse(ev.target.result));
+          game.gs=gs; gs.addNotif(`Spiel geladen! Tag ${gs.day}`,'success');
+          game.inGame=true; game.selectedBranch=gs.branches.length?0:-1;
+          game.setScreen('overview');
+        }catch(err){ addToast('Ungültige Speicherdatei!','danger'); }
+      };
+      reader.readAsText(file);
+    };
+    document.body.appendChild(input); input.click(); document.body.removeChild(input);
   }
 };
 game.init();
@@ -820,7 +835,7 @@ function drawMainMenu() {
   const btnNew=new Button(cw-140,ch-10,280,50,'Neues Spiel',C.GOLD,C.BG);
   const btnLoad=new Button(cw-140,ch+70,280,50,'Spiel laden',C.ORANGE,C.BG);
   const btnQuit=new Button(cw-140,ch+150,280,50,'Beenden',C.RED,C.WHITE);
-  btnLoad.enabled=GameState.saveExists(0)||GameState.saveExists(1)||GameState.saveExists(2);
+  btnLoad.enabled=true; // File picker always available
   btnNew.draw(); btnLoad.draw(); btnQuit.draw();
   if(btnNew.update()){game.nameInput='DÖNERIMPERIUM™';game.namePhase='name';game.nameDialog=true;}
   if(btnLoad.update()) game.setScreen('load_menu');
@@ -888,25 +903,19 @@ function drawDifficulty() {
 
 function drawLoadMenu() {
   gradientRect(0,0,W,H,C.BG,'#1e140a');
-  drawText('Spielstand laden',FONTS.lg,C.GOLD,W/2,70,'center','top');
-  const btnBack=new Button(20,20,110,36,'← Zurück',C.PANEL2,C.TEXT);
-  btnBack.draw(); if(btnBack.update()) game.setScreen('main_menu');
+  doenerIcon(W/2,160,50,game.anim);
+  drawText('Spielstand laden',FONTS.lg,C.GOLD,W/2,230,'center','top');
+  drawText('Wähle eine zuvor gespeicherte .txt-Datei aus.',FONTS.sm,C.TEXT2,W/2,280,'center','top');
 
-  for(let i=0;i<3;i++){
-    const y=180+i*120;
-    fillRect(W/2-200,y-20,400,100,C.PANEL,C.BORDER,1,8);
-    const exists=GameState.saveExists(i);
-    if(exists){
-      const gs=GameState.load(i);
-      drawText(`Slot ${i+1}: ${gs.company_name}`,FONTS.md,C.GOLD,W/2,y,'center','top');
-      drawText(`Tag ${gs.day} | ${formatMoney(gs.money)} | ${gs.branches.length} Filialen`,FONTS.sm,C.TEXT2,W/2,y+30,'center','top');
-    } else {
-      drawText(`Slot ${i+1}: Leer`,FONTS.md,C.GRAY,W/2,y+14,'center','top');
-    }
-    const btn=new Button(W/2-150,y+60,300,36,`Slot ${i+1} laden`,C.ORANGE,C.BG);
-    btn.enabled=exists; btn.draw();
-    if(btn.update()) game.loadGame(i);
-  }
+  const btnLoad=new Button(W/2-160,330,320,56,'📂 Datei öffnen...',C.GOLD,C.BG,FONTS.md);
+  btnLoad.draw(); if(btnLoad.update()) game.loadGame(0);
+
+  fillRect(W/2-240,415,480,80,C.PANEL,C.BORDER,1,8);
+  drawText('💡 So speicherst du:',FONTS.sm,C.GOLD,W/2,423,'center','top');
+  drawText('Im Spiel → Optionen → Spiel speichern → .txt wird heruntergeladen',FONTS.xs,C.TEXT2,W/2,450,'center','top');
+
+  const btnBack=new Button(W/2-90,520,180,44,'← Zurück',C.PANEL2,C.TEXT);
+  btnBack.draw(); if(btnBack.update()) game.setScreen('main_menu');
 }
 
 // ─── HUD ───
@@ -1624,15 +1633,16 @@ function drawOptions() {
     if(mouse.clicked&&mouse.x>=rx&&mouse.x<=rx+74&&mouse.y>=ry&&mouse.y<=ry+30){gs.game_speed=spd;consumeClick();}
   }
 
-  const btnSave0=new Button(cx-160,215,300,50,'Spiel speichern (Slot 1)',C.GOLD,C.BG);
-  const btnSave1=new Button(cx-160,275,300,50,'Spiel speichern (Slot 2)',C.ORANGE,C.BG);
-  const btnSave2=new Button(cx-160,335,300,50,'Spiel speichern (Slot 3)',C.TEAL,C.BG);
-  const btnMenu=new Button(cx-160,415,300,50,'Zurück zum Hauptmenü',C.RED,C.WHITE);
-  [btnSave0,btnSave1,btnSave2,btnMenu].forEach(b=>b.draw());
-  if(btnSave0.update()) gs.save(0);
-  if(btnSave1.update()) gs.save(1);
-  if(btnSave2.update()) gs.save(2);
+  const btnSave=new Button(cx-160,215,300,56,'💾 Spiel speichern (.txt)',C.GOLD,C.BG,FONTS.md);
+  const btnMenu=new Button(cx-160,295,300,50,'Zurück zum Hauptmenü',C.RED,C.WHITE);
+  btnSave.draw(); btnMenu.draw();
+  if(btnSave.update()) gs.save(0);
   if(btnMenu.update()){game.inGame=false;game.setScreen('main_menu');}
+
+  fillRect(cx-160,365,300,60,C.PANEL,C.BORDER,1,8);
+  drawText('💡 Tipp: Die .txt-Datei',FONTS.xs,C.GOLD,cx-148,373,'left','top');
+  drawText('kann über "Spiel laden"',FONTS.xs,C.TEXT2,cx-148,393,'left','top');
+  drawText('im Hauptmenü geladen werden.',FONTS.xs,C.TEXT2,cx-148,413,'left','top');
 
   // Tips
   fillRect(W-450,200,420,360,C.PANEL,C.BORDER,1,8);
