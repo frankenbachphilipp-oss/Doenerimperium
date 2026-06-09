@@ -145,6 +145,7 @@ canvas.addEventListener('touchend', e => {
 }, {passive: false});
 
 canvas.addEventListener('touchmove', e => {
+  if (e.touches.length !== 1) return; // pinch handled separately
   e.preventDefault();
   const t = e.touches[0];
   const r = canvas.getBoundingClientRect();
@@ -159,6 +160,42 @@ function resizeCanvas() {
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
+
+// ─── PINCH TO ZOOM (iOS) ───
+let _pinchBaseScale = 1;
+let _pinchCurrentScale = 1;
+let _pinchStartDist = 0;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3.0;
+
+function _pinchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+function applyZoom(scale) {
+  _pinchCurrentScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale));
+  const base = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const s = base * _pinchCurrentScale;
+  canvas.style.width = s * W + 'px';
+  canvas.style.height = s * H + 'px';
+  canvas.style.transformOrigin = '50% 50%';
+}
+
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    _pinchStartDist = _pinchDist(e.touches);
+    _pinchBaseScale = _pinchCurrentScale;
+  }
+}, {passive: true, capture: true});
+
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dist = _pinchDist(e.touches);
+    applyZoom(_pinchBaseScale * (dist / _pinchStartDist));
+  }
+}, {passive: false, capture: true});
 
 // ─── COLORS ───
 const C = {
