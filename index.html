@@ -423,6 +423,7 @@ class Branch {
     this.hygiene=Math.max(0,this.hygiene-rndBetween(0.5,2.0)*hygieneMod);
     if(this.staff.some(s=>s.stype==='reiniger') && this.hygiene<80) this.hygiene=80;
     for(const s of this.staff) s.tickMorale(moraleMod);
+    if(this.spa_cooldown>0) this.spa_cooldown--;
     for(let i=this.active_events.length-1;i>=0;i--){
       this.active_events[i].remaining=(this.active_events[i].remaining||this.active_events[i].duration)-1;
       if(this.active_events[i].remaining<=0) this.active_events.splice(i,1);
@@ -437,7 +438,7 @@ class Branch {
       suppliers:this.suppliers,upgrades:[...this.upgrades],marketing:this.marketing,
       total_customers:this.total_customers,total_revenue:this.total_revenue,
       sauce_popularity:this.sauce_popularity,active_events:this.active_events,
-      capacity:this.capacity,age_days:this.age_days};
+      capacity:this.capacity,age_days:this.age_days,spa_cooldown:this.spa_cooldown||0};
   }
   static fromObj(o) {
     const b=new Branch(o.name,o.location_type,o.city,o.country||'Deutschland');
@@ -446,6 +447,7 @@ class Branch {
     b.staff=o.staff.map(s=>Staff.fromObj(s));
     b.upgrades=new Set(o.upgrades||[]);
     b.active_events=o.active_events||[];
+    b.spa_cooldown=o.spa_cooldown||0;
     if(!b.sauce_popularity) {b.sauce_popularity={}; for(const k of Object.keys(SAUCE_NAMES)) b.sauce_popularity[k]=0;}
     return b;
   }
@@ -1270,6 +1272,43 @@ function drawBranchStaff(branch) {
       consumeClick(); const fired=branch.staff.splice(i,1)[0]; game.gs.addNotif(`${fired.name} entlassen.`,'warn'); break;
     }
     ry+=38;
+  }
+
+  // ─── SPA-TAG BUTTON ───
+  ry+=18;
+  const spaOnCooldown=branch.spa_cooldown>0;
+  const spaHasStaff=branch.staff.length>0;
+  const spaCanUse=spaHasStaff&&!spaOnCooldown;
+  const spaCol=spaCanUse?C.TEAL:C.GRAY2;
+  const spaBorderCol=spaCanUse?C.TEAL:C.GRAY2;
+  fillRect(rx,ry,300,42,spaCol,spaBorderCol,spaCanUse?2:1,8);
+  // highlight on hover
+  const spaHov=mouse.x>=rx&&mouse.x<=rx+300&&mouse.y>=ry&&mouse.y<=ry+42;
+  if(spaHov&&spaCanUse) fillRect(rx,ry,300,42,lerpColor(C.TEAL,C.WHITE,0.15),C.TEAL,2,8);
+  drawText('🧖 Spa-Tag schenken',FONTS.sm,spaCanUse?C.BG:C.GRAY,rx+150,ry+21,'center','middle');
+  if(spaOnCooldown){
+    drawText(`Cooldown: noch ${branch.spa_cooldown} Tag${branch.spa_cooldown!==1?'e':''}`,FONTS.xs,C.ORANGE,rx+310,ry+5,'left','top');
+  } else if(spaHasStaff) {
+    drawText('+35% Moral für alle Mitarbeiter',FONTS.xs,C.TEXT2,rx+310,ry+5,'left','top');
+  } else {
+    drawText('Keine Mitarbeiter vorhanden',FONTS.xs,C.GRAY,rx+310,ry+5,'left','top');
+  }
+  // Morale summary bar
+  if(branch.staff.length){
+    const avgMorale=branch.staff.reduce((a,s)=>a+s.morale,0)/branch.staff.length;
+    drawText('Ø Moral:',FONTS.xs,C.TEXT2,rx+310,ry+22,'left','top');
+    drawBar(rx+390,ry+22,180,14,avgMorale,1,avgMorale>0.7?C.GREEN:avgMorale>0.4?C.WARN:C.RED,undefined,false);
+    drawText(`${(avgMorale*100).toFixed(0)}%`,FONTS.xs,avgMorale>0.7?C.GREEN:avgMorale>0.4?C.WARN:C.RED,rx+580,ry+22,'left','top');
+  }
+  if(mouse.clicked&&spaHov){
+    consumeClick();
+    if(!spaHasStaff) game.gs.addNotif('Keine Mitarbeiter für den Spa-Tag!','warn');
+    else if(spaOnCooldown) game.gs.addNotif(`Spa-Tag noch auf Cooldown (${branch.spa_cooldown} Tage)!`,'warn');
+    else {
+      for(const s of branch.staff) s.morale=Math.min(1,s.morale+0.35);
+      branch.spa_cooldown=7;
+      game.gs.addNotif(`🧖 Spa-Tag! Alle Mitarbeiter in ${branch.name} +35% Moral!`,'success');
+    }
   }
 }
 
