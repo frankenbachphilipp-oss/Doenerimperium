@@ -7,8 +7,8 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0a0806; display: flex; justify-content: center; align-items: center;
-  min-height: 100vh; overflow: hidden; }
-canvas { display: block; image-rendering: crisp-edges; }
+  min-height: 100vh; overflow: auto; }
+canvas { display: block; image-rendering: crisp-edges; touch-action: none; }
 </style>
 </head>
 <body>
@@ -96,80 +96,14 @@ mobileInput.addEventListener('keydown', e => {
   if (e.key === 'Backspace') { keyPressed = 'Backspace'; }
 });
 
-// ─── TOUCH EVENTS ───
-function getTouchPos(t) {
-  const r = canvas.getBoundingClientRect();
-  return {
-    x: (t.clientX - r.left) * (W / r.width),
-    y: (t.clientY - r.top)  * (H / r.height),
-  };
-}
-
-let _isPinching = false;
-
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  if (e.touches.length === 1) {
-    _isPinching = false;
-    const p = getTouchPos(e.touches[0]);
-    mouse.x = p.x; mouse.y = p.y;
-    mouse.down = true;
-  }
-  if (e.touches.length === 2) {
-    _isPinching = true;
-    mouse.down = false;
-    _pinchStartDist = _pinchDist(e.touches);
-    _pinchBaseScale = _pinchCurrentScale;
-  }
-}, {passive: false});
-
-canvas.addEventListener('touchend', e => {
-  e.preventDefault();
-  if (e.touches.length === 0) {
-    // All fingers lifted
-    if (!_isPinching && e.changedTouches.length) {
-      const p = getTouchPos(e.changedTouches[0]);
-      mouse.x = p.x; mouse.y = p.y;
-      mouse.clicked = true;
-    }
-    _isPinching = false;
-    mouse.down = false;
-    mouse.released = true;
-  } else if (e.touches.length === 1) {
-    // One finger still down after pinch — don't fire click
-    _isPinching = false;
-  }
-
-  // iOS keyboard: focus must happen synchronously here
-  if (isIOS) {
-    if (mobileInputActive) {
-      mobileInput.focus();
-    } else {
-      mobileInput.style.pointerEvents = 'auto';
-      mobileInput.focus();
-      setTimeout(() => { if (!mobileInputActive) { mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; } }, 300);
-    }
-  }
-}, {passive: false});
-
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  if (e.touches.length === 2) {
-    _isPinching = true;
-    const dist = _pinchDist(e.touches);
-    applyZoom(_pinchBaseScale * (dist / _pinchStartDist));
-  } else if (e.touches.length === 1 && !_isPinching) {
-    const p = getTouchPos(e.touches[0]);
-    mouse.x = p.x; mouse.y = p.y;
-  }
-}, {passive: false});
-
-// ─── PINCH TO ZOOM (iOS only) ───
+// ─── PINCH TO ZOOM + PAN ───
 let _pinchBaseScale = 1;
 let _pinchCurrentScale = 1;
 let _pinchStartDist = 0;
-const ZOOM_MIN = 0.5;
+let _isPinching = false;
+const ZOOM_MIN = 0.8;
 const ZOOM_MAX = 3.0;
+const ZOOM_SENSITIVITY = 0.4; // <1 = less sensitive (dampens the pinch ratio)
 
 function _pinchDist(touches) {
   const dx = touches[0].clientX - touches[1].clientX;
@@ -192,6 +126,99 @@ function resizeCanvas() {
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
+
+// Pan state — one finger drag when zoomed in
+let _panActive = false;
+let _panLastX = 0;
+let _panLastY = 0;
+
+function getTouchPos(t) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (t.clientX - r.left) * (W / r.width),
+    y: (t.clientY - r.top)  * (H / r.height),
+  };
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    _isPinching = false;
+    const p = getTouchPos(e.touches[0]);
+    mouse.x = p.x; mouse.y = p.y;
+    mouse.down = true;
+    // Pan: track start position in page coords
+    _panLastX = e.touches[0].clientX;
+    _panLastY = e.touches[0].clientY;
+    _panActive = _pinchCurrentScale > 1.05; // only pan when zoomed in
+  }
+  if (e.touches.length === 2) {
+    _isPinching = true;
+    _panActive = false;
+    mouse.down = false;
+    _pinchStartDist = _pinchDist(e.touches);
+    _pinchBaseScale = _pinchCurrentScale;
+  }
+}, {passive: false});
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length === 0) {
+    if (!_isPinching && e.changedTouches.length) {
+      const p = getTouchPos(e.changedTouches[0]);
+      mouse.x = p.x; mouse.y = p.y;
+      // Only fire click if finger barely moved (not a pan gesture)
+      const dx = e.changedTouches[0].clientX - _panLastX;
+      const dy = e.changedTouches[0].clientY - _panLastY;
+      if (Math.sqrt(dx*dx+dy*dy) < 10) mouse.clicked = true;
+    }
+    _isPinching = false;
+    _panActive = false;
+    mouse.down = false;
+    mouse.released = true;
+  } else if (e.touches.length === 1) {
+    _isPinching = false;
+    _panLastX = e.touches[0].clientX;
+    _panLastY = e.touches[0].clientY;
+    _panActive = _pinchCurrentScale > 1.05;
+  }
+
+  // iOS keyboard: focus must happen synchronously here
+  if (isIOS) {
+    if (mobileInputActive) {
+      mobileInput.focus();
+    } else {
+      mobileInput.style.pointerEvents = 'auto';
+      mobileInput.focus();
+      setTimeout(() => { if (!mobileInputActive) { mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; } }, 300);
+    }
+  }
+}, {passive: false});
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    _isPinching = true;
+    _panActive = false;
+    const dist = _pinchDist(e.touches);
+    // Dampen: interpolate between 1 and raw ratio by ZOOM_SENSITIVITY
+    const rawRatio = dist / _pinchStartDist;
+    const dampedRatio = 1 + (rawRatio - 1) * ZOOM_SENSITIVITY;
+    applyZoom(_pinchBaseScale * dampedRatio);
+  } else if (e.touches.length === 1) {
+    if (_panActive) {
+      // Scroll the page to pan
+      const dx = e.touches[0].clientX - _panLastX;
+      const dy = e.touches[0].clientY - _panLastY;
+      window.scrollBy(-dx, -dy);
+      _panLastX = e.touches[0].clientX;
+      _panLastY = e.touches[0].clientY;
+    } else if (!_isPinching) {
+      const p = getTouchPos(e.touches[0]);
+      mouse.x = p.x; mouse.y = p.y;
+    }
+  }
+}, {passive: false});
 
 // ─── COLORS ───
 const C = {
