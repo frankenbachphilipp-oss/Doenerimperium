@@ -28,15 +28,39 @@ canvas.width = W; canvas.height = H;
 // ─── MOBILE DETECTION ───
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   || (navigator.maxTouchPoints > 1 && !/Win/.test(navigator.platform));
+const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-// Hidden input for mobile keyboard
-const mobileInput = document.createElement('input');
-mobileInput.type = 'text';
-mobileInput.autocomplete = 'off';
-mobileInput.autocorrect = 'off';
-mobileInput.autocapitalize = 'none';
-mobileInput.spellcheck = false;
-mobileInput.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;border:none;outline:none;padding:0;margin:0;';
+// ─── HIDDEN INPUT FOR MOBILE KEYBOARD ───
+// iOS RULE: .focus() only works synchronously inside a user-gesture handler.
+// Strategy: on iOS we keep a textarea always focused. It's invisible but
+// font-size:16px stops Safari from zooming. We never blur it unless we want
+// the keyboard gone. activateMobileInput/deactivateMobileInput control whether
+// keystrokes feed into the game.
+const mobileInput = document.createElement('textarea');
+mobileInput.setAttribute('autocomplete', 'off');
+mobileInput.setAttribute('autocorrect', 'off');
+mobileInput.setAttribute('autocapitalize', 'none');
+mobileInput.setAttribute('spellcheck', 'false');
+mobileInput.setAttribute('enterkeyhint', 'done');
+mobileInput.style.cssText = [
+  'position:fixed',
+  'bottom:0',         // bottom avoids iOS scroll-to-visible
+  'left:0',
+  'width:100%',       // full width so iOS sees it as a real field
+  'height:3px',
+  'font-size:16px',   // CRITICAL: prevents iOS auto-zoom
+  'opacity:0',
+  'border:none',
+  'outline:none',
+  'padding:0',
+  'margin:0',
+  'resize:none',
+  'background:transparent',
+  'color:transparent',
+  'caret-color:transparent',
+  'pointer-events:none',
+  'z-index:9999',
+].join(';');
 document.body.appendChild(mobileInput);
 
 let mobileInputActive = false;
@@ -44,22 +68,23 @@ let mobileInputLastLen = 0;
 
 function activateMobileInput(initialValue) {
   if (!isMobile) return;
+  mobileInputActive = true;
   mobileInput.value = initialValue || '';
   mobileInputLastLen = mobileInput.value.length;
   mobileInput.style.pointerEvents = 'auto';
-  mobileInput.focus();
-  const len = mobileInput.value.length;
-  mobileInput.setSelectionRange(len, len);
-  mobileInputActive = true;
+  // On iOS the focus was already called in the touchend handler.
+  // On Android we call focus() here directly (works fine outside gesture).
+  if (!isIOS) mobileInput.focus();
 }
 function deactivateMobileInput() {
   if (!isMobile) return;
-  mobileInput.blur();
-  mobileInput.style.pointerEvents = 'none';
   mobileInputActive = false;
+  mobileInput.style.pointerEvents = 'none';
+  mobileInput.blur();
 }
 
 mobileInput.addEventListener('input', () => {
+  if (!mobileInputActive) { mobileInput.value = ''; mobileInputLastLen = 0; return; }
   const val = mobileInput.value;
   const newLen = val.length;
   if (newLen > mobileInputLastLen) {
@@ -70,25 +95,51 @@ mobileInput.addEventListener('input', () => {
   mobileInputLastLen = newLen;
 });
 mobileInput.addEventListener('keydown', e => {
+  if (!mobileInputActive) return;
   keys[e.key] = true;
-  if (e.key === 'Enter') { keyPressed = 'Enter'; e.preventDefault(); }
-  if (e.key === 'Escape') { keyPressed = 'Escape'; }
+  if (e.key === 'Enter' || e.key === 'Go') { keyPressed = 'Enter'; e.preventDefault(); }
+  if (e.key === 'Escape') keyPressed = 'Escape';
 });
 mobileInput.addEventListener('keyup', e => { keys[e.key] = false; });
 
-// Touch support for canvas clicks
+// Touch: set coordinates on touchstart, fire click + focus on touchend
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   const t = e.touches[0];
   const r = canvas.getBoundingClientRect();
   mouse.x = (t.clientX - r.left) * (W / r.width);
   mouse.y = (t.clientY - r.top) * (H / r.height);
-  mouse.down = true; mouse.clicked = true;
+  mouse.down = true;
 }, {passive: false});
+
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
-  mouse.down = false; mouse.released = true;
+  if (e.changedTouches.length) {
+    const t = e.changedTouches[0];
+    const r = canvas.getBoundingClientRect();
+    mouse.x = (t.clientX - r.left) * (W / r.width);
+    mouse.y = (t.clientY - r.top) * (H / r.height);
+  }
+  mouse.down = false;
+  mouse.released = true;
+  mouse.clicked = true;
+  // iOS: focus must happen synchronously in this handler.
+  // We check if a text dialog is open OR will open from this tap.
+  // If a dialog is already open, keep keyboard visible.
+  // If we're on main menu and tapped in the "Neues Spiel" button area,
+  // or on the branch screen and tapped "Neue Filiale", focus immediately.
+  if (mobileInputActive) {
+    mobileInput.focus();
+  } else {
+    // Speculatively focus — the game loop will set mobileInputActive if needed.
+    // This puts us in the iOS-trusted gesture window.
+    mobileInput.style.pointerEvents = 'auto';
+    mobileInput.focus();
+    // If the game loop doesn't activate it within 300ms, blur again.
+    setTimeout(() => { if (!mobileInputActive) { mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; } }, 300);
+  }
 }, {passive: false});
+
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
   const t = e.touches[0];
