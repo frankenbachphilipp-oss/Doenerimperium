@@ -26,6 +26,103 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 canvas.width = W; canvas.height = H;
 
+// ─── SOUND ENGINE (Web Audio API) ───
+const _ac = new (window.AudioContext || window.webkitAudioContext)();
+// Unlock AudioContext on first touch/click (browser requirement)
+document.addEventListener('touchend', () => { if(_ac.state==='suspended') _ac.resume(); }, {once:false});
+document.addEventListener('click',    () => { if(_ac.state==='suspended') _ac.resume(); }, {once:false});
+
+function _playSound(fn) {
+  if(_ac.state==='suspended') _ac.resume();
+  fn(_ac);
+}
+
+// Kasse: short "cha-ching" — two quick tones
+function sndSale() {
+  _playSound(ac => {
+    const g = ac.createGain();
+    g.connect(ac.destination);
+    [880, 1320].forEach((freq, i) => {
+      const o = ac.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      const env = ac.createGain();
+      env.gain.setValueAtTime(0, ac.currentTime + i*0.07);
+      env.gain.linearRampToValueAtTime(0.18, ac.currentTime + i*0.07 + 0.01);
+      env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i*0.07 + 0.18);
+      o.connect(env); env.connect(ac.destination);
+      o.start(ac.currentTime + i*0.07);
+      o.stop(ac.currentTime + i*0.07 + 0.2);
+    });
+  });
+}
+
+// Neue Filiale: ascending fanfare
+function sndNewBranch() {
+  _playSound(ac => {
+    [523, 659, 784, 1047].forEach((freq, i) => {
+      const o = ac.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = freq;
+      const env = ac.createGain();
+      env.gain.setValueAtTime(0, ac.currentTime + i*0.1);
+      env.gain.linearRampToValueAtTime(0.2, ac.currentTime + i*0.1 + 0.02);
+      env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i*0.1 + 0.25);
+      o.connect(env); env.connect(ac.destination);
+      o.start(ac.currentTime + i*0.1);
+      o.stop(ac.currentTime + i*0.1 + 0.3);
+    });
+  });
+}
+
+// Fehler: low buzzer
+function sndError() {
+  _playSound(ac => {
+    const o = ac.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(180, ac.currentTime);
+    o.frequency.linearRampToValueAtTime(100, ac.currentTime + 0.2);
+    const env = ac.createGain();
+    env.gain.setValueAtTime(0.15, ac.currentTime);
+    env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.25);
+    o.connect(env); env.connect(ac.destination);
+    o.start(ac.currentTime);
+    o.stop(ac.currentTime + 0.25);
+  });
+}
+
+// Einstellen: friendly "bloop"
+function sndHire() {
+  _playSound(ac => {
+    const o = ac.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(440, ac.currentTime);
+    o.frequency.linearRampToValueAtTime(660, ac.currentTime + 0.12);
+    const env = ac.createGain();
+    env.gain.setValueAtTime(0.15, ac.currentTime);
+    env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.2);
+    o.connect(env); env.connect(ac.destination);
+    o.start(ac.currentTime);
+    o.stop(ac.currentTime + 0.2);
+  });
+}
+
+// Entlassen: descending "blip"
+function sndFire() {
+  _playSound(ac => {
+    const o = ac.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(440, ac.currentTime);
+    o.frequency.linearRampToValueAtTime(220, ac.currentTime + 0.15);
+    const env = ac.createGain();
+    env.gain.setValueAtTime(0.13, ac.currentTime);
+    env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.2);
+    o.connect(env); env.connect(ac.destination);
+    o.start(ac.currentTime);
+    o.stop(ac.currentTime + 0.2);
+  });
+}
+
 // ─── MOBILE DETECTION ───
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   || (navigator.maxTouchPoints > 1 && !/Win/.test(navigator.platform));
@@ -790,6 +887,7 @@ class GameState {
     const sosse=recipe.sosse||'sosse_knoblauch';
     branch.sauce_popularity[sosse]=(branch.sauce_popularity[sosse]||0)+1;
     this.money+=profit; this.total_revenue+=price; this.total_expenses+=cost; this.total_customers_served++;
+    if(typeof sndSale==='function' && Math.random()<0.15) sndSale(); // 15% chance so it doesn't spam
     const repChange=(satisfaction-d.st)*0.3;
     branch.reputation=Math.max(0,Math.min(100,branch.reputation+repChange));
   }
@@ -897,6 +995,7 @@ class GameState {
     b.staff.push(new Staff('azubi',1));
     this.branches.push(b); this.total_branches_ever++; this.countries_present.add(country);
     this.addNotif(`Neue Filiale '${name}' in ${city} eröffnet! Kosten: ${cost.toFixed(0)}€`,'success');
+    if(typeof sndNewBranch==='function') sndNewBranch();
     return b;
   }
   closeBranch(idx) { if(idx>=0&&idx<this.branches.length){const b=this.branches.splice(idx,1)[0];this.addNotif(`Filiale '${b.name}' geschlossen.`,'warn');} }
@@ -914,6 +1013,7 @@ class GameState {
     this.notifications.push({msg,type,time:this.day*24+this.hour,age:0});
     if(this.notifications.length>50) this.notifications.shift();
     addToast(msg,type);
+    if(type==='danger' && typeof sndError==='function') sndError();
   }
   tickNotifs(dt) { for(const n of this.notifications) n.age+=dt; }
   save(slot) {
@@ -1451,7 +1551,7 @@ function drawBranchStaff(branch) {
     game.hireRects[stype]={x:hx,y:hy,w:hw,h:hh,salary:cfg.salary};
     if(mouse.clicked&&mouse.x>=hx&&mouse.x<=hx+hw&&mouse.y>=hy&&mouse.y<=hy+hh){
       consumeClick();
-      if(game.gs.money>=cfg.salary){game.gs.money-=cfg.salary;const s=new Staff(stype);branch.staff.push(s);game.gs.addNotif(`${s.name} eingestellt!`,'success');}
+      if(game.gs.money>=cfg.salary){game.gs.money-=cfg.salary;const s=new Staff(stype);branch.staff.push(s);game.gs.addNotif(`${s.name} eingestellt!`,'success');if(typeof sndHire==='function')sndHire();}
       else game.gs.addNotif('Zu wenig Geld!','danger');
     }
     ry+=50;
@@ -1470,7 +1570,7 @@ function drawBranchStaff(branch) {
     fillRect(fx,fy,fw,fh,C.DARK_RED,null,0,4); drawText('Entlassen',FONTS.xxs,C.WHITE,fx+fw/2,fy+fh/2,'center','middle');
     game.fireRects.push({x:fx,y:fy,w:fw,h:fh,idx:i});
     if(mouse.clicked&&mouse.x>=fx&&mouse.x<=fx+fw&&mouse.y>=fy&&mouse.y<=fy+fh){
-      consumeClick(); const fired=branch.staff.splice(i,1)[0]; game.gs.addNotif(`${fired.name} entlassen.`,'warn'); break;
+      consumeClick(); const fired=branch.staff.splice(i,1)[0]; game.gs.addNotif(`${fired.name} entlassen.`,'warn'); if(typeof sndFire==='function')sndFire(); break;
     }
     ry+=38;
   }
