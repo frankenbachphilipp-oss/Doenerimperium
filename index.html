@@ -16,10 +16,6 @@ canvas { display: block; image-rendering: crisp-edges; touch-action: none; flex-
 <div id="viewport"><canvas id="c"></canvas></div>
 <script>
 'use strict';
-// ═══════════════════════════════════════════════════════
-//  DÖNERIMPERIUM™  –  Single-File HTML5 Port
-//  Vollständige Konvertierung von Pygame zu Canvas
-// ═══════════════════════════════════════════════════════
 
 const W = 1280, H = 720;
 const canvas = document.getElementById('c');
@@ -28,7 +24,19 @@ canvas.width = W; canvas.height = H;
 
 // ─── SOUND ENGINE (Web Audio API) ───
 const _ac = new (window.AudioContext || window.webkitAudioContext)();
-// Unlock AudioContext on first touch/click (browser requirement)
+
+// Master gain nodes for volume control
+const _musicGain = _ac.createGain();
+const _sfxGain   = _ac.createGain();
+_musicGain.connect(_ac.destination);
+_sfxGain.connect(_ac.destination);
+
+// Volume state (0-1)
+let musicVolume = 0.5;
+let sfxVolume   = 0.7;
+_musicGain.gain.value = musicVolume;
+_sfxGain.gain.value   = sfxVolume;
+
 document.addEventListener('touchend', () => { if(_ac.state==='suspended') _ac.resume(); }, {once:false});
 document.addEventListener('click',    () => { if(_ac.state==='suspended') _ac.resume(); }, {once:false});
 
@@ -37,27 +45,23 @@ function _playSound(fn) {
   fn(_ac);
 }
 
-// Kasse: short "cha-ching" — two quick tones
 function sndSale() {
   _playSound(ac => {
-    const g = ac.createGain();
-    g.connect(ac.destination);
     [880, 1320].forEach((freq, i) => {
       const o = ac.createOscillator();
       o.type = 'sine';
       o.frequency.value = freq;
       const env = ac.createGain();
       env.gain.setValueAtTime(0, ac.currentTime + i*0.07);
-      env.gain.linearRampToValueAtTime(0.18, ac.currentTime + i*0.07 + 0.01);
+      env.gain.linearRampToValueAtTime(0.18 * sfxVolume, ac.currentTime + i*0.07 + 0.01);
       env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i*0.07 + 0.18);
-      o.connect(env); env.connect(ac.destination);
+      o.connect(env); env.connect(_sfxGain);
       o.start(ac.currentTime + i*0.07);
       o.stop(ac.currentTime + i*0.07 + 0.2);
     });
   });
 }
 
-// Neue Filiale: ascending fanfare
 function sndNewBranch() {
   _playSound(ac => {
     [523, 659, 784, 1047].forEach((freq, i) => {
@@ -66,16 +70,15 @@ function sndNewBranch() {
       o.frequency.value = freq;
       const env = ac.createGain();
       env.gain.setValueAtTime(0, ac.currentTime + i*0.1);
-      env.gain.linearRampToValueAtTime(0.2, ac.currentTime + i*0.1 + 0.02);
+      env.gain.linearRampToValueAtTime(0.2 * sfxVolume, ac.currentTime + i*0.1 + 0.02);
       env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i*0.1 + 0.25);
-      o.connect(env); env.connect(ac.destination);
+      o.connect(env); env.connect(_sfxGain);
       o.start(ac.currentTime + i*0.1);
       o.stop(ac.currentTime + i*0.1 + 0.3);
     });
   });
 }
 
-// Fehler: low buzzer
 function sndError() {
   _playSound(ac => {
     const o = ac.createOscillator();
@@ -83,15 +86,14 @@ function sndError() {
     o.frequency.setValueAtTime(180, ac.currentTime);
     o.frequency.linearRampToValueAtTime(100, ac.currentTime + 0.2);
     const env = ac.createGain();
-    env.gain.setValueAtTime(0.15, ac.currentTime);
+    env.gain.setValueAtTime(0.15 * sfxVolume, ac.currentTime);
     env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.25);
-    o.connect(env); env.connect(ac.destination);
+    o.connect(env); env.connect(_sfxGain);
     o.start(ac.currentTime);
     o.stop(ac.currentTime + 0.25);
   });
 }
 
-// Einstellen: friendly "bloop"
 function sndHire() {
   _playSound(ac => {
     const o = ac.createOscillator();
@@ -99,15 +101,14 @@ function sndHire() {
     o.frequency.setValueAtTime(440, ac.currentTime);
     o.frequency.linearRampToValueAtTime(660, ac.currentTime + 0.12);
     const env = ac.createGain();
-    env.gain.setValueAtTime(0.15, ac.currentTime);
+    env.gain.setValueAtTime(0.15 * sfxVolume, ac.currentTime);
     env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.2);
-    o.connect(env); env.connect(ac.destination);
+    o.connect(env); env.connect(_sfxGain);
     o.start(ac.currentTime);
     o.stop(ac.currentTime + 0.2);
   });
 }
 
-// Entlassen: descending "blip"
 function sndFire() {
   _playSound(ac => {
     const o = ac.createOscillator();
@@ -115,9 +116,9 @@ function sndFire() {
     o.frequency.setValueAtTime(440, ac.currentTime);
     o.frequency.linearRampToValueAtTime(220, ac.currentTime + 0.15);
     const env = ac.createGain();
-    env.gain.setValueAtTime(0.13, ac.currentTime);
+    env.gain.setValueAtTime(0.13 * sfxVolume, ac.currentTime);
     env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.2);
-    o.connect(env); env.connect(ac.destination);
+    o.connect(env); env.connect(_sfxGain);
     o.start(ac.currentTime);
     o.stop(ac.currentTime + 0.2);
   });
@@ -129,7 +130,6 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const isAndroid = /Android/i.test(navigator.userAgent);
 
-// ─── HIDDEN INPUT FOR MOBILE KEYBOARD ───
 const mobileInput = document.createElement('textarea');
 mobileInput.setAttribute('autocomplete', 'off');
 mobileInput.setAttribute('autocorrect', 'off');
@@ -137,23 +137,10 @@ mobileInput.setAttribute('autocapitalize', 'none');
 mobileInput.setAttribute('spellcheck', 'false');
 mobileInput.setAttribute('enterkeyhint', 'done');
 mobileInput.style.cssText = [
-  'position:fixed',
-  'bottom:0',
-  'left:0',
-  'width:100%',
-  'height:3px',
-  'font-size:16px',
-  'opacity:0',
-  'border:none',
-  'outline:none',
-  'padding:0',
-  'margin:0',
-  'resize:none',
-  'background:transparent',
-  'color:transparent',
-  'caret-color:transparent',
-  'pointer-events:none',
-  'z-index:9999',
+  'position:fixed','bottom:0','left:0','width:100%','height:3px','font-size:16px',
+  'opacity:0','border:none','outline:none','padding:0','margin:0','resize:none',
+  'background:transparent','color:transparent','caret-color:transparent',
+  'pointer-events:none','z-index:9999',
 ].join(';');
 document.body.appendChild(mobileInput);
 
@@ -165,9 +152,7 @@ function activateMobileInput() {
   mobileInputActive = true;
   mobileInput.value = MOBILE_SENTINEL;
   mobileInput.style.pointerEvents = 'auto';
-  // Android: focus() works fine outside gesture handler
   if (isAndroid) mobileInput.focus();
-  // iOS: focus was already called in touchend handler
 }
 function deactivateMobileInput() {
   if (!isMobile) return;
@@ -179,12 +164,8 @@ function deactivateMobileInput() {
 mobileInput.addEventListener('input', () => {
   if (!mobileInputActive) { mobileInput.value = MOBILE_SENTINEL; return; }
   const val = mobileInput.value;
-  // anything longer than sentinel = new character(s)
-  if (val.length > 1) {
-    charTyped += val.replace(MOBILE_SENTINEL, '');
-  } else if (val.length === 0) {
-    keyPressed = 'Backspace';
-  }
+  if (val.length > 1) { charTyped += val.replace(MOBILE_SENTINEL, ''); }
+  else if (val.length === 0) { keyPressed = 'Backspace'; }
   mobileInput.value = MOBILE_SENTINEL;
 });
 mobileInput.addEventListener('keydown', e => {
@@ -195,13 +176,8 @@ mobileInput.addEventListener('keydown', e => {
 });
 
 // ─── PINCH TO ZOOM + PAN ───
-let _pinchBaseScale = 1;
-let _pinchCurrentScale = 1;
-let _pinchStartDist = 0;
-let _isPinching = false;
-const ZOOM_MIN = 0.8;
-const ZOOM_MAX = 3.0;
-const ZOOM_SENSITIVITY = 0.4; // <1 = less sensitive (dampens the pinch ratio)
+let _pinchBaseScale = 1, _pinchCurrentScale = 1, _pinchStartDist = 0, _isPinching = false;
+const ZOOM_MIN = 0.8, ZOOM_MAX = 3.0, ZOOM_SENSITIVITY = 0.4;
 
 function _pinchDist(touches) {
   const dx = touches[0].clientX - touches[1].clientX;
@@ -214,14 +190,12 @@ function applyZoom(scale) {
   const s = base * _pinchCurrentScale;
   canvas.style.width  = s * W + 'px';
   canvas.style.height = s * H + 'px';
-  // Center in viewport when smaller, allow overflow when larger
   const vp = document.getElementById('viewport');
   if (vp) {
     vp.style.justifyContent = s * W <= window.innerWidth  ? 'center' : 'flex-start';
     vp.style.alignItems     = s * H <= window.innerHeight ? 'center' : 'flex-start';
   }
 }
-
 function resizeCanvas() {
   const base = Math.min(window.innerWidth / W, window.innerHeight / H);
   const s = base * _pinchCurrentScale;
@@ -236,17 +210,11 @@ function resizeCanvas() {
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-// Pan state — one finger drag when zoomed in
-let _panActive = false;
-let _panLastX = 0;
-let _panLastY = 0;
+let _panActive = false, _panLastX = 0, _panLastY = 0;
 
 function getTouchPos(t) {
   const r = canvas.getBoundingClientRect();
-  return {
-    x: (t.clientX - r.left) * (W / r.width),
-    y: (t.clientY - r.top)  * (H / r.height),
-  };
+  return { x: (t.clientX - r.left) * (W / r.width), y: (t.clientY - r.top) * (H / r.height) };
 }
 
 canvas.addEventListener('touchstart', e => {
@@ -254,19 +222,13 @@ canvas.addEventListener('touchstart', e => {
   if (e.touches.length === 1) {
     _isPinching = false;
     const p = getTouchPos(e.touches[0]);
-    mouse.x = p.x; mouse.y = p.y;
-    mouse.down = true;
-    // Pan: track start position in page coords
-    _panLastX = e.touches[0].clientX;
-    _panLastY = e.touches[0].clientY;
-    _panActive = _pinchCurrentScale > 1.05; // only pan when zoomed in
+    mouse.x = p.x; mouse.y = p.y; mouse.down = true;
+    _panLastX = e.touches[0].clientX; _panLastY = e.touches[0].clientY;
+    _panActive = _pinchCurrentScale > 1.05;
   }
   if (e.touches.length === 2) {
-    _isPinching = true;
-    _panActive = false;
-    mouse.down = false;
-    _pinchStartDist = _pinchDist(e.touches);
-    _pinchBaseScale = _pinchCurrentScale;
+    _isPinching = true; _panActive = false; mouse.down = false;
+    _pinchStartDist = _pinchDist(e.touches); _pinchBaseScale = _pinchCurrentScale;
   }
 }, {passive: false});
 
@@ -276,29 +238,19 @@ canvas.addEventListener('touchend', e => {
     if (!_isPinching && e.changedTouches.length) {
       const p = getTouchPos(e.changedTouches[0]);
       mouse.x = p.x; mouse.y = p.y;
-      // Only fire click if finger barely moved (not a pan gesture)
       const dx = e.changedTouches[0].clientX - _panLastX;
       const dy = e.changedTouches[0].clientY - _panLastY;
       if (Math.sqrt(dx*dx+dy*dy) < 10) mouse.clicked = true;
     }
-    _isPinching = false;
-    _panActive = false;
-    mouse.down = false;
-    mouse.released = true;
+    _isPinching = false; _panActive = false; mouse.down = false; mouse.released = true;
   } else if (e.touches.length === 1) {
-    _isPinching = false;
-    _panLastX = e.touches[0].clientX;
-    _panLastY = e.touches[0].clientY;
+    _isPinching = false; _panLastX = e.touches[0].clientX; _panLastY = e.touches[0].clientY;
     _panActive = _pinchCurrentScale > 1.05;
   }
-
-  // iOS keyboard: focus must happen synchronously here
   if (isIOS) {
-    if (mobileInputActive) {
-      mobileInput.focus();
-    } else {
-      mobileInput.style.pointerEvents = 'auto';
-      mobileInput.focus();
+    if (mobileInputActive) { mobileInput.focus(); }
+    else {
+      mobileInput.style.pointerEvents = 'auto'; mobileInput.focus();
       setTimeout(() => { if (!mobileInputActive) { mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; } }, 300);
     }
   }
@@ -307,10 +259,8 @@ canvas.addEventListener('touchend', e => {
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
   if (e.touches.length === 2) {
-    _isPinching = true;
-    _panActive = false;
+    _isPinching = true; _panActive = false;
     const dist = _pinchDist(e.touches);
-    // Dampen: interpolate between 1 and raw ratio by ZOOM_SENSITIVITY
     const rawRatio = dist / _pinchStartDist;
     const dampedRatio = 1 + (rawRatio - 1) * ZOOM_SENSITIVITY;
     applyZoom(_pinchBaseScale * dampedRatio);
@@ -319,10 +269,8 @@ canvas.addEventListener('touchmove', e => {
       const dx = e.touches[0].clientX - _panLastX;
       const dy = e.touches[0].clientY - _panLastY;
       const vp = document.getElementById('viewport');
-      vp.scrollLeft -= dx;
-      vp.scrollTop  -= dy;
-      _panLastX = e.touches[0].clientX;
-      _panLastY = e.touches[0].clientY;
+      vp.scrollLeft -= dx; vp.scrollTop -= dy;
+      _panLastX = e.touches[0].clientX; _panLastY = e.touches[0].clientY;
     } else if (!_isPinching) {
       const p = getTouchPos(e.touches[0]);
       mouse.x = p.x; mouse.y = p.y;
@@ -360,7 +308,7 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', e => { if(e.button===0){mouse.down=true;mouse.clicked=true;} });
 canvas.addEventListener('mouseup',   e => { if(e.button===0){mouse.down=false;mouse.released=true;} });
 document.addEventListener('keydown', e => {
-  if(mobileInputActive) return; // mobile input handles this itself
+  if(mobileInputActive) return;
   keys[e.key] = true; keyPressed = e.key;
   if(e.key.length === 1) charTyped += e.key;
   if(['Backspace','Enter','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
@@ -370,6 +318,54 @@ canvas.setAttribute('tabindex','0'); canvas.focus();
 
 function consumeClick() { mouse.clicked = false; }
 function consumeKey()   { keyPressed = null; charTyped = ''; }
+
+// ─── SLIDER DRAG STATE ───
+const _sliders = {};  // id -> {x,y,w,val}
+let _dragSlider = null;
+
+function registerSlider(id, x, y, w, val) {
+  _sliders[id] = {x, y, w, val};
+  return val;
+}
+// Call each frame. Returns current value (0-1).
+function updateSlider(id, color) {
+  const s = _sliders[id];
+  if (!s) return 0;
+  const h = 22, knobR = 11;
+  const trackY = s.y + h/2;
+
+  // Drag logic
+  if (mouse.clicked && mouse.x >= s.x - knobR && mouse.x <= s.x + s.w + knobR &&
+      mouse.y >= s.y - 4 && mouse.y <= s.y + h + 4) {
+    _dragSlider = id;
+  }
+  if (_dragSlider === id) {
+    if (mouse.down || mouse.clicked) {
+      s.val = Math.max(0, Math.min(1, (mouse.x - s.x) / s.w));
+    } else {
+      _dragSlider = null;
+    }
+  }
+
+  // Draw track bg
+  fillRect(s.x, s.y, s.w, h, C.BG2, C.BORDER, 1, h/2);
+  // Draw filled portion
+  const fillW = Math.max(h, s.val * s.w);
+  ctx.beginPath();
+  ctx.roundRect(s.x, s.y, fillW, h, h/2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  // Knob
+  const kx = s.x + s.val * s.w;
+  fillCirc(kx, trackY, knobR, C.WHITE);
+  strokeLine(kx, trackY, kx, trackY, color, 1); // center dot
+  ctx.beginPath(); ctx.arc(kx, trackY, knobR, 0, Math.PI*2);
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+  // Pct label
+  drawText(Math.round(s.val*100)+'%', FONTS.xxs, C.TEXT2, s.x + s.w + 20, s.y + 3, 'left', 'top');
+
+  return s.val;
+}
 
 // ─── DRAWING UTILS ───
 function fillRect(x,y,w,h,fill,stroke,sw=1,r=0){
@@ -442,12 +438,10 @@ function miniChart(data, x,y,w,h, col) {
   if(!d.length) { drawText('Keine Daten',FONTS.xxs,C.GRAY,x+w/2,y+h/2,'center','middle'); return; }
   const mn=Math.min(...data), mx=Math.max(...data), rng=mx-mn||1;
   const pts=data.map((v,i)=>[x+4+i/(data.length-1)*(w-8), y+h-4-(v-mn)/rng*(h-12)]);
-  // fill
   ctx.beginPath(); ctx.moveTo(pts[0][0],y+h-4);
   pts.forEach(p=>ctx.lineTo(p[0],p[1]));
   ctx.lineTo(pts[pts.length-1][0],y+h-4); ctx.closePath();
   const [r,g,b]=hexToRgb(col); ctx.fillStyle=`rgba(${r},${g},${b},0.2)`; ctx.fill();
-  // line
   ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
   pts.forEach(p=>ctx.lineTo(p[0],p[1]));
   ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
@@ -456,7 +450,6 @@ function miniChart(data, x,y,w,h, col) {
 
 function doenerIcon(cx,cy,size,anim) {
   const wobble=Math.sin(anim*3)*2;
-  // spit
   strokeLine(cx,cy-size,cx,cy+size,'#8c8070',3);
   const layers=[[180,80,50],[200,100,60],[170,70,40],[190,90,55],[160,65,35]];
   for(let i=0;i<layers.length;i++){
@@ -476,7 +469,7 @@ class Button {
   constructor(x,y,w,h,label,bg=C.GOLD,fg=C.BG,font=null) {
     this.x=x;this.y=y;this.w=w;this.h=h;this.label=label;
     this.bg=bg;this.fg=fg;this.font=font||FONTS.sm;
-    this.enabled=true;this.hovered=false;this._pressed=false;
+    this.enabled=true;this.hovered=false;
   }
   contains(px,py){ return px>=this.x&&px<=this.x+this.w&&py>=this.y&&py<=this.y+this.h; }
   update() {
@@ -489,7 +482,6 @@ class Button {
     const bg = !this.enabled ? C.GRAY2 : this.hovered ? lerpColor(this.bg,C.WHITE,0.2) : this.bg;
     const fg = !this.enabled ? C.GRAY : this.fg;
     fillRect(this.x,this.y,this.w,this.h,bg,null,0,6);
-    // highlight
     ctx.fillStyle='rgba(255,255,255,0.07)';
     fillRect(this.x+2,this.y+2,this.w-4,this.h/2-2,'rgba(255,255,255,0.07)',null,0,4);
     drawText(this.label,this.font,fg,this.x+this.w/2,this.y+this.h/2,'center','middle');
@@ -531,11 +523,11 @@ const TICK_RATE = 1.0;
 const TICKS_PER_HOUR = 6;
 
 const LOCATION_TYPES = {
-  kleinststadt: {rent:800,  foot_traffic:200, label:'🏘 Kleinstadt',      unlock:0},
-  grossstadt:   {rent:2500, foot_traffic:500, label:'🏙 Großstadt',       unlock:3},
-  bahnhof:      {rent:3500, foot_traffic:800, label:'🚂 Bahnhof',         unlock:5},
-  einkaufszentrum:{rent:4500,foot_traffic:1100,label:'🛍 Einkaufszentrum',unlock:8},
-  flughafen:    {rent:8000, foot_traffic:1600,label:'✈ Flughafen',       unlock:15},
+  kleinststadt:    {rent:800,  foot_traffic:200,  label:'🏘 Kleinstadt',       unlock:0},
+  grossstadt:      {rent:2500, foot_traffic:500,  label:'🏙 Großstadt',        unlock:3},
+  bahnhof:         {rent:3500, foot_traffic:800,  label:'🚂 Bahnhof',          unlock:5},
+  einkaufszentrum: {rent:4500, foot_traffic:1100, label:'🛍 Einkaufszentrum',  unlock:8},
+  flughafen:       {rent:8000, foot_traffic:1600, label:'✈ Flughafen',        unlock:15},
 };
 
 const CUSTOMER_RATES = {
@@ -684,10 +676,8 @@ class Branch {
   }
   get marketingMultiplier() {
     let m=1.0;
-    if(this.marketing.flyer) m+=0.1;
-    if(this.marketing.social_media) m+=0.2;
-    if(this.marketing.influencer) m+=0.35;
-    if(this.marketing.stadion) m+=0.5;
+    if(this.marketing.flyer) m+=0.1; if(this.marketing.social_media) m+=0.2;
+    if(this.marketing.influencer) m+=0.35; if(this.marketing.stadion) m+=0.5;
     if(this.marketing.tv) m+=0.8;
     return m;
   }
@@ -754,18 +744,18 @@ class Branch {
 // ─── RESEARCH TREE ───
 function buildResearchTree() {
   return {
-    schnittmaschine:  {id:'schnittmaschine', name:'Auto-Döner-Schneider',desc:'Produktionsgeschwindigkeit +30%.',cost:5000,dur:7,req:[],unlocked:false,researching:false,progress:0,effect:{speed_mod:1.3}},
-    premium_zutaten:  {id:'premium_zutaten', name:'Premium-Zutaten',     desc:'Qualität +2. Premium-Fleisch verfügbar.',cost:8000,dur:14,req:[],unlocked:false,researching:false,progress:0,effect:{quality_mod:2}},
-    ki_kasse:         {id:'ki_kasse',        name:'KI-Kassensystem',     desc:'Durchsatz +25%.',cost:12000,dur:10,req:['schnittmaschine'],unlocked:false,researching:false,progress:0,effect:{throughput_mod:1.25}},
-    schnelle_lieferung:{id:'schnelle_lieferung',name:'Expresslieferdienst',desc:'Lieferengpässe schneller behoben.',cost:7000,dur:7,req:[],unlocked:false,researching:false,progress:0,effect:{supply_resilience:0.5}},
-    eigene_logistik:  {id:'eigene_logistik', name:'Eigene Logistik',     desc:'Lieferkosten -20%.',cost:50000,dur:30,req:['schnelle_lieferung'],unlocked:false,researching:false,progress:0,effect:{cost_mod:0.8}},
-    franchise:        {id:'franchise',       name:'Franchise-System',    desc:'Passives Einkommen durch Franchises!',cost:80000,dur:45,req:['ki_kasse'],unlocked:false,researching:false,progress:0,effect:{franchise_enabled:true}},
-    brotfabrik:       {id:'brotfabrik',      name:'Eigene Brotfabrik',   desc:'Brotkosten -60%.',cost:200000,dur:60,req:['eigene_logistik'],unlocked:false,researching:false,progress:0,effect:{bread_cost_mod:0.4}},
-    fleischproduktion:{id:'fleischproduktion',name:'Fleischproduktion',  desc:'Fleischkosten -50%, Qualität +1.',cost:500000,dur:90,req:['brotfabrik'],unlocked:false,researching:false,progress:0,effect:{meat_cost_mod:0.5,quality_mod:1}},
-    solar_energie:    {id:'solar_energie',   name:'Solarenergie',        desc:'Stromkosten sinken.',cost:25000,dur:14,req:[],unlocked:false,researching:false,progress:0,effect:{energy_resilience:true,cost_mod:0.95}},
-    loyalty_app:      {id:'loyalty_app',     name:'Döner-Loyalty-App',   desc:'Stammkunden +40%.',cost:15000,dur:21,req:['ki_kasse'],unlocked:false,researching:false,progress:0,effect:{loyalty_mod:1.4}},
-    geheimrezept:     {id:'geheimrezept',    name:'Geheimes Familienrezept',desc:'Legendaröse Soße! Qualität +3, Ruf +20.',cost:30000,dur:30,req:['premium_zutaten'],unlocked:false,researching:false,progress:0,effect:{quality_mod:3,reputation_bonus:20}},
-    mega_grill:       {id:'mega_grill',      name:'Mega-Drehspieß 3000', desc:'Kapazität +100%.',cost:40000,dur:21,req:['schnittmaschine'],unlocked:false,researching:false,progress:0,effect:{capacity_mod:2}},
+    schnittmaschine:   {id:'schnittmaschine',  name:'Auto-Döner-Schneider',   desc:'Produktionsgeschwindigkeit +30%.',cost:5000, dur:7, req:[],unlocked:false,researching:false,progress:0,effect:{speed_mod:1.3}},
+    premium_zutaten:   {id:'premium_zutaten',  name:'Premium-Zutaten',        desc:'Qualität +2. Premium-Fleisch verfügbar.',cost:8000,dur:14,req:[],unlocked:false,researching:false,progress:0,effect:{quality_mod:2}},
+    ki_kasse:          {id:'ki_kasse',         name:'KI-Kassensystem',        desc:'Durchsatz +25%.',cost:12000,dur:10,req:['schnittmaschine'],unlocked:false,researching:false,progress:0,effect:{throughput_mod:1.25}},
+    schnelle_lieferung:{id:'schnelle_lieferung',name:'Expresslieferdienst',   desc:'Lieferengpässe schneller behoben.',cost:7000,dur:7,req:[],unlocked:false,researching:false,progress:0,effect:{supply_resilience:0.5}},
+    eigene_logistik:   {id:'eigene_logistik',  name:'Eigene Logistik',        desc:'Lieferkosten -20%.',cost:50000,dur:30,req:['schnelle_lieferung'],unlocked:false,researching:false,progress:0,effect:{cost_mod:0.8}},
+    franchise:         {id:'franchise',        name:'Franchise-System',       desc:'Passives Einkommen durch Franchises!',cost:80000,dur:45,req:['ki_kasse'],unlocked:false,researching:false,progress:0,effect:{franchise_enabled:true}},
+    brotfabrik:        {id:'brotfabrik',       name:'Eigene Brotfabrik',      desc:'Brotkosten -60%.',cost:200000,dur:60,req:['eigene_logistik'],unlocked:false,researching:false,progress:0,effect:{bread_cost_mod:0.4}},
+    fleischproduktion: {id:'fleischproduktion',name:'Fleischproduktion',      desc:'Fleischkosten -50%, Qualität +1.',cost:500000,dur:90,req:['brotfabrik'],unlocked:false,researching:false,progress:0,effect:{meat_cost_mod:0.5,quality_mod:1}},
+    solar_energie:     {id:'solar_energie',    name:'Solarenergie',           desc:'Stromkosten sinken.',cost:25000,dur:14,req:[],unlocked:false,researching:false,progress:0,effect:{energy_resilience:true,cost_mod:0.95}},
+    loyalty_app:       {id:'loyalty_app',      name:'Döner-Loyalty-App',      desc:'Stammkunden +40%.',cost:15000,dur:21,req:['ki_kasse'],unlocked:false,researching:false,progress:0,effect:{loyalty_mod:1.4}},
+    geheimrezept:      {id:'geheimrezept',     name:'Geheimes Familienrezept',desc:'Legendaröse Soße! Qualität +3, Ruf +20.',cost:30000,dur:30,req:['premium_zutaten'],unlocked:false,researching:false,progress:0,effect:{quality_mod:3,reputation_bonus:20}},
+    mega_grill:        {id:'mega_grill',       name:'Mega-Drehspieß 3000',    desc:'Kapazität +100%.',cost:40000,dur:21,req:['schnittmaschine'],unlocked:false,researching:false,progress:0,effect:{capacity_mod:2}},
   };
 }
 
@@ -866,7 +856,6 @@ class GameState {
   }
   _serveCustomer(branch, recipe) {
     const d=this.diff();
-    const ctypes=Object.keys(CUSTOMER_RATES);
     const ctype=this._pickCustomerType(this.hour);
     const cfg=CUSTOMER_RATES[ctype];
     const budget=rndBetween(...cfg.budget);
@@ -876,8 +865,9 @@ class GameState {
     let quality=recipe.qualityScore()+this._qualityBonus();
     const qn=(quality-5)/5;
     let satisfaction=qn*0.6;
-    if(budget>=recipe.price) satisfaction+=0.2; else satisfaction-=((recipe.price-budget)/Math.max(recipe.price,1))*0.4*(1-qn*0.5);
-    if(Math.random()<0.3) satisfaction+=0.2; // sauce match
+    if(budget>=recipe.price) satisfaction+=0.2;
+    else satisfaction-=((recipe.price-budget)/Math.max(recipe.price,1))*0.4*(1-qn*0.5);
+    if(Math.random()<0.3) satisfaction+=0.2;
     satisfaction=Math.max(0,Math.min(1,satisfaction));
     const price=Math.min(recipe.price,budget);
     const cost=recipe.ingredientCost()*this._costMod();
@@ -887,7 +877,7 @@ class GameState {
     const sosse=recipe.sosse||'sosse_knoblauch';
     branch.sauce_popularity[sosse]=(branch.sauce_popularity[sosse]||0)+1;
     this.money+=profit; this.total_revenue+=price; this.total_expenses+=cost; this.total_customers_served++;
-    if(typeof sndSale==='function' && Math.random()<0.15) sndSale(); // 15% chance so it doesn't spam
+    if(Math.random()<0.15) sndSale();
     const repChange=(satisfaction-d.st)*0.3;
     branch.reputation=Math.max(0,Math.min(100,branch.reputation+repChange));
   }
@@ -909,7 +899,6 @@ class GameState {
       b.daily_expenses=dc; totalDailyExp+=dc;
     }
     this.money-=totalDailyExp; this.total_expenses+=totalDailyExp;
-    // Research
     if(this.active_research){
       const node=this.research_tree[this.active_research];
       if(node&&node.researching){
@@ -937,7 +926,6 @@ class GameState {
     for(const b of this.branches) b.tickDay(d.hd,d.md);
     if(this.day%60===0&&this.branches.length) this._maybeAddCompetitor();
     if(this.money<-50000) this.addNotif('BANKROTT! Du bist pleite! Spiel verloren!','danger');
-
   }
   _processMonthly() {
     if(this.loan_monthly_payment>0){
@@ -995,7 +983,7 @@ class GameState {
     b.staff.push(new Staff('azubi',1));
     this.branches.push(b); this.total_branches_ever++; this.countries_present.add(country);
     this.addNotif(`Neue Filiale '${name}' in ${city} eröffnet! Kosten: ${cost.toFixed(0)}€`,'success');
-    if(typeof sndNewBranch==='function') sndNewBranch();
+    sndNewBranch();
     return b;
   }
   closeBranch(idx) { if(idx>=0&&idx<this.branches.length){const b=this.branches.splice(idx,1)[0];this.addNotif(`Filiale '${b.name}' geschlossen.`,'warn');} }
@@ -1013,7 +1001,7 @@ class GameState {
     this.notifications.push({msg,type,time:this.day*24+this.hour,age:0});
     if(this.notifications.length>50) this.notifications.shift();
     addToast(msg,type);
-    if(type==='danger' && typeof sndError==='function') sndError();
+    if(type==='danger') sndError();
   }
   tickNotifs(dt) { for(const n of this.notifications) n.age+=dt; }
   save(slot) {
@@ -1029,8 +1017,6 @@ class GameState {
     document.body.removeChild(a); URL.revokeObjectURL(url);
     this.addNotif('Spielstand als .txt heruntergeladen!','success');
   }
-  static load(slot) { return null; }
-  static saveExists(slot) { return false; }
   toObj() {
     return {version:'1.0',money:this.money,day:this.day,hour:this.hour,minute:this.minute,tick:this.tick,
       company_name:this.company_name,total_revenue:this.total_revenue,total_expenses:this.total_expenses,
@@ -1071,10 +1057,12 @@ const game = {
   nameInput:'', namePhase:'', nameDialog:false,
   newBranchState:null, modal:null,
   hireRects:{}, fireRects:[], supplyRects:[],
-  scale:1,
 
   init() {
     for(let i=0;i<40;i++) this.particles.push(this.makeParticle());
+    // Register sliders with initial values
+    registerSlider('music_vol', 0, 0, 260, musicVolume);
+    registerSlider('sfx_vol',   0, 0, 260, sfxVolume);
   },
   makeParticle() {
     return {x:Math.random()*W,y:Math.random()*H,vx:rndBetween(-20,20),vy:rndBetween(-40,-10),
@@ -1110,11 +1098,10 @@ const game = {
           game.gs=gs; gs.addNotif(`Spiel geladen! Tag ${gs.day}`,'success');
           game.inGame=true; game.selectedBranch=gs.branches.length?0:-1;
           game.setScreen('overview');
-        }catch(err){ addToast('Ungültige Speicherdatei! Ist das wirklich ein DÖNERIMPERIUM-Save?','danger'); }
+        }catch(err){ addToast('Ungültige Speicherdatei!','danger'); }
       };
       reader.readAsText(file);
     };
-    // Remove if user cancels without picking
     input.addEventListener('cancel',()=>{ try{document.body.removeChild(input);}catch(e){} });
     document.body.appendChild(input);
     input.click();
@@ -1132,7 +1119,6 @@ const DIFFICULTIES = [
 
 function drawMainMenu() {
   gradientRect(0,0,W,H,C.BG,'#1e140a');
-  // Particles
   for(const p of game.particles){ fillCirc(p.x,p.y,p.size,p.color); }
   doenerIcon(W/2,160,50,game.anim);
   drawText('DÖNER', FONTS.title, C.GOLD, W/2, 225, 'center','top');
@@ -1143,14 +1129,12 @@ function drawMainMenu() {
   const btnNew=new Button(cw-140,ch-10,280,50,'Neues Spiel',C.GOLD,C.BG);
   const btnLoad=new Button(cw-140,ch+70,280,50,'Spiel laden',C.ORANGE,C.BG);
   const btnQuit=new Button(cw-140,ch+150,280,50,'Beenden',C.RED,C.WHITE);
-  btnLoad.enabled=true; // File picker always available
   btnNew.draw(); btnLoad.draw(); btnQuit.draw();
-  if(btnNew.update()){game.nameInput='DÖNERIMPERIUM™';game.namePhase='name';game.nameDialog=true;activateMobileInput(game.nameInput);}
+  if(btnNew.update()){game.nameInput='DÖNERIMPERIUM™';game.nameDialog=true;activateMobileInput();}
   if(btnLoad.update()) game.setScreen('load_menu');
   if(btnQuit.update()) window.close();
 
   drawText('v1.0 | DÖNERIMPERIUM™ 2026',FONTS.xxs,C.GRAY,W/2,H-18,'center','top');
-
   if(game.nameDialog) drawNameDialog();
 }
 
@@ -1186,7 +1170,6 @@ function drawDifficulty() {
     const sel=i===game.selectedDiff;
     fillRect(cx,cy,cw2,ch2,sel?lerpColor(C.PANEL2,d.color,0.1):C.PANEL,d.color,sel?3:1,10);
     drawText(d.label,FONTS.lg,d.color,cx+cw2/2,cy+30,'center','top');
-    // wrap desc
     ctx.font=FONTS.xs; ctx.textAlign='center'; ctx.fillStyle=C.GRAY;
     const words=d.desc.split(' '); let line='', lines=[];
     for(const w of words){const t=line?line+' '+w:w;if(ctx.measureText(t).width<cw2-20&&line)line=t;else{if(line)lines.push(line);line=w;}}
@@ -1245,7 +1228,6 @@ function drawHUD() {
   const spdStr=gs.paused?'PAUSE':`${gs.game_speed}x`;
   drawText(spdStr,FONTS.sm,gs.paused?C.RED:C.GOLD,W-270,14,'left','top');
 
-  // Speed buttons
   const bw=34;
   const btnPause=new Button(W-162,8,bw,28,gs.paused?'▶':'⏸',C.PANEL2,C.GOLD,FONTS.sm);
   const btn1x=new Button(W-124,8,bw,28,'1x',gs.game_speed===1?C.GOLD:C.PANEL2,gs.game_speed===1?C.BG:C.TEXT,FONTS.xs);
@@ -1260,7 +1242,6 @@ function drawHUD() {
   const btnAch=new Button(W-268,8,100,28,'Achievements',C.PANEL2,C.GOLD,FONTS.xs);
   btnAch.draw(); if(btnAch.update()) game.setScreen('achievements');
 
-  // Nav
   const navY=44, navH=32, nw=Math.floor((W-20)/NAV.length);
   for(let i=0;i<NAV.length;i++){
     const scr=NAV[i].screen, lbl=NAV[i].label;
@@ -1276,7 +1257,6 @@ function drawOverview() {
   const gs=game.gs; const y0=85;
   drawText('📊 Unternehmensübersicht',FONTS.lg,C.GOLD,20,y0,'left','top');
 
-  // Left: key stats
   fillRect(20,y0+45,380,280,C.PANEL,C.BORDER,1,8);
   drawText('💰 Finanzkennzahlen',FONTS.sm,C.GOLD,34,y0+59,'left','top');
   const stats=[
@@ -1296,7 +1276,6 @@ function drawOverview() {
     drawText(v,FONTS.sm,vc,394,ry,'right','top');
   }
 
-  // Charts
   fillRect(420,y0+45,410,130,C.PANEL,C.BORDER,1,8);
   drawText('📈 Tagesgewinn (30 Tage)',FONTS.sm,C.GOLD,434,y0+57,'left','top');
   miniChart(gs.revenue_history,430,y0+82,390,88,C.GREEN);
@@ -1304,7 +1283,6 @@ function drawOverview() {
   drawText('👥 Kunden/Tag (30 Tage)',FONTS.sm,C.GOLD,434,y0+204,'left','top');
   miniChart(gs.customer_history.map(v=>v),430,y0+229,390,88,C.BLUE);
 
-  // Branch leaderboard
   fillRect(850,y0+45,400,280,C.PANEL,C.BORDER,1,8);
   drawText('🏆 Top Filialen',FONTS.sm,C.GOLD,864,y0+59,'left','top');
   const sorted=[...gs.branches].sort((a,b)=>b.total_revenue-a.total_revenue).slice(0,7);
@@ -1317,7 +1295,6 @@ function drawOverview() {
   }
   if(!gs.branches.length) drawText('Noch keine Filialen!',FONTS.md,C.GRAY,1050,y0+170,'center','middle');
 
-  // Recent notifications
   fillRect(20,y0+340,820,220,C.PANEL,C.BORDER,1,8);
   drawText('📢 Ereignisse & Meldungen',FONTS.sm,C.GOLD,34,y0+354,'left','top');
   const recent=gs.notifications.slice(-8).reverse();
@@ -1327,7 +1304,6 @@ function drawOverview() {
     drawText(`• ${msg}`,FONTS.xs,tc,34,y0+382+i*22,'left','top');
   }
 
-  // Victory conditions
   fillRect(850,y0+340,400,220,C.PANEL,C.BORDER,1,8);
   drawText('🏆 Siegbedingungen',FONTS.sm,C.GOLD,864,y0+354,'left','top');
   const conds=[
@@ -1346,21 +1322,14 @@ function drawOverview() {
   doenerIcon(W-60,y0+15,28,game.anim);
 }
 
-
 // ─── BRANCHES SCREEN ───
 function drawBranches() {
   const gs=game.gs; const y0=85;
   drawText('🏪 Filialen-Management',FONTS.lg,C.GOLD,10,y0,'left','top');
 
-  // Branch list (left panel)
   const lx=10,ly=y0+35,lw=400,lh=575;
   fillRect(lx,ly,lw,lh,C.BG2,C.BORDER,1,4);
   const itemH=60;
-  // scrolling
-  const totalH=gs.branches.length*itemH;
-  if(totalH>lh && mouse.x>=lx&&mouse.x<=lx+lw&&mouse.y>=ly&&mouse.y<=ly+lh){
-    // handled below in event
-  }
   ctx.save(); ctx.beginPath(); ctx.rect(lx,ly,lw,lh); ctx.clip();
   for(let i=0;i<gs.branches.length;i++){
     const b=gs.branches[i]; const iy=ly+i*itemH-game.branchScroll;
@@ -1379,12 +1348,11 @@ function drawBranches() {
   if(!gs.branches.length) drawText('Keine Filialen',FONTS.md,C.GRAY,lx+lw/2,ly+lh/2,'center','middle');
   ctx.restore();
 
-  // Buttons below list
   const btnNew=new Button(lx,ly+lh+8,190,36,'+ Neue Filiale',C.GOLD,C.BG,FONTS.sm);
   const btnClose=new Button(lx+200,ly+lh+8,200,36,'Filiale schließen',C.RED,C.WHITE,FONTS.sm);
   btnClose.enabled=game.selectedBranch>=0;
   btnNew.draw(); btnClose.draw();
-  if(btnNew.update()){game.newBranchState={phase:'name',name:'',city:'',country:'Deutschland',locType:'kleinststadt'};activateMobileInput('');}
+  if(btnNew.update()){game.newBranchState={phase:'name',name:'',city:'',country:'Deutschland',locType:'kleinststadt'};activateMobileInput();}
   if(btnClose.update()&&game.selectedBranch>=0){
     const b=gs.branches[game.selectedBranch];
     game.modal={title:'Filiale schließen?',msg:`Möchtest du '${b.name}' wirklich schließen?`,
@@ -1394,13 +1362,11 @@ function drawBranches() {
   if(game.newBranchState){drawNewBranchDialog();return;}
   if(game.modal){drawModal();return;}
 
-  // Right panel
   if(game.selectedBranch<0||game.selectedBranch>=gs.branches.length){
     drawText('← Wähle eine Filiale aus',FONTS.md,C.GRAY,700,400,'center','middle'); return;
   }
   const branch=gs.branches[game.selectedBranch];
 
-  // Tabs
   const tabs=['Info','Rezept','Personal','Marketing','Lieferkette'];
   const tx=420,ty=y0+35,tw=840,th=32;
   const tabW=tw/tabs.length;
@@ -1452,7 +1418,6 @@ function drawBranchInfo(branch) {
   const btnClean=new Button(rx,ry,200,34,'🧹 Reinigen (-150€)',C.TEAL,C.BG,FONTS.sm);
   btnClean.draw(); if(btnClean.update()){if(game.gs.money>=150){game.gs.money-=150;branch.hygiene=Math.min(100,branch.hygiene+20);game.gs.addNotif('Filiale gereinigt! +20 Hygiene','success');}else game.gs.addNotif('Zu wenig Geld!','danger');} ry+=44;
 
-  // Sauce popularity
   ry+=8; drawText('🥫 Soßen-Beliebtheit:',FONTS.sm,C.GOLD,rx,ry,'left','top'); ry+=28;
   const total=Math.max(1,Object.values(branch.sauce_popularity).reduce((a,b)=>a+b,0));
   for(const [k,name] of Object.entries(SAUCE_NAMES)){
@@ -1461,14 +1426,12 @@ function drawBranchInfo(branch) {
     drawBar(rx+130,ry,250,14,cnt,total,C.ORANGE,undefined,false);
     drawText(String(cnt),FONTS.xxs,C.TEXT,rx+390,ry,'left','top'); ry+=20;
   }
-  // Events
   if(branch.active_events.length){ry+=8;drawText('⚡ Aktive Ereignisse:',FONTS.sm,C.GOLD,rx,ry,'left','top');ry+=28;
     for(const ev of branch.active_events) {drawText(`• ${ev.name} (noch ${ev.remaining||'?'} Tage)`,FONTS.xs,typeColor(ev.type),rx,ry,'left','top');ry+=20;}}
 }
 
 function drawBranchRecipe(branch) {
   const rx=430; let ry=122;
-  // Recipe selector
   for(let i=0;i<branch.recipes.length;i++){
     const sel=i===game.selectedRecipe%branch.recipes.length;
     fillRect(rx+i*90,ry,85,28,sel?C.GOLD:C.PANEL2,C.BORDER,1,4);
@@ -1478,7 +1441,6 @@ function drawBranchRecipe(branch) {
   const recipe=branch.recipes[game.selectedRecipe%branch.recipes.length];
   drawText(`✏ Rezept: ${recipe.name}`,FONTS.md,C.GOLD,rx,ry,'left','top'); ry+=35;
 
-  // Price
   drawText('Preis:',FONTS.sm,C.TEXT2,rx,ry,'left','top');
   drawText(`${recipe.price.toFixed(2)}€`,FONTS.md,C.GOLD,rx+120,ry,'left','top');
   const btnPdn=new Button(rx+270,ry,30,28,'-',C.RED,C.WHITE,FONTS.md);
@@ -1489,7 +1451,6 @@ function drawBranchRecipe(branch) {
   const cost=recipe.ingredientCost(); const margin=recipe.price-cost;
   drawText(`Kosten:${cost.toFixed(2)}€ Marge:${margin.toFixed(2)}€`,FONTS.xs,moneyColor(margin),rx+350,ry+6,'left','top'); ry+=35;
 
-  // Fleisch menge
   drawText('Fleischmenge:',FONTS.sm,C.TEXT2,rx,ry,'left','top');
   drawText(`x${recipe.fleisch_menge.toFixed(2)}`,FONTS.md,C.ORANGE,rx+160,ry,'left','top');
   const btnFdn=new Button(rx+270,ry,30,28,'-',C.RED,C.WHITE,FONTS.md);
@@ -1498,7 +1459,6 @@ function drawBranchRecipe(branch) {
   if(btnFdn.update()) recipe.fleisch_menge=Math.max(0.5,+(recipe.fleisch_menge-0.25).toFixed(2));
   if(btnFup.update()) recipe.fleisch_menge=Math.min(3,+(recipe.fleisch_menge+0.25).toFixed(2)); ry+=35;
 
-  // Fleisch type
   drawText('Fleischtyp:',FONTS.sm,C.TEXT2,rx,ry,'left','top'); ry+=28;
   const btnFbasis=new Button(rx,ry,150,28,'Basis-Fleisch',recipe.fleisch==='fleisch_basis'?C.GOLD:C.PANEL2,C.TEXT,FONTS.xs);
   const btnFprem=new Button(rx+160,ry,150,28,'Premium-Fleisch',recipe.fleisch==='fleisch_premium'?C.GOLD:C.PANEL2,C.TEXT,FONTS.xs);
@@ -1506,7 +1466,6 @@ function drawBranchRecipe(branch) {
   if(btnFbasis.update()) recipe.fleisch='fleisch_basis';
   if(btnFprem.update()) recipe.fleisch='fleisch_premium'; ry+=40;
 
-  // Sosse
   drawText('Soße:',FONTS.sm,C.TEXT2,rx,ry,'left','top'); ry+=28;
   let si=0;
   for(const [k,name] of Object.entries(SAUCE_NAMES)){
@@ -1516,7 +1475,6 @@ function drawBranchRecipe(branch) {
   }
   ry+=Math.ceil(Object.keys(SAUCE_NAMES).length/3)*38+5;
 
-  // Zutaten
   drawText('Zutaten:',FONTS.sm,C.TEXT2,rx,ry,'left','top'); ry+=28;
   const ingrs=[['salat','Salat'],['tomate','Tomate'],['zwiebel','Zwiebel'],['kraut','Kraut'],['gurke','Gurke']];
   for(let i=0;i<ingrs.length;i++){
@@ -1525,7 +1483,6 @@ function drawBranchRecipe(branch) {
     btn.draw(); if(btn.update()) recipe[k]=!recipe[k];
   } ry+=42;
 
-  // Quality
   const q=recipe.qualityScore();
   drawText(`Qualität: ${q.toFixed(1)}/10  |  Gewinn/Döner: ${recipe.profitMargin().toFixed(2)}€`,FONTS.sm,C.GOLD,rx,ry,'left','top');
   drawBar(rx+290,ry,200,18,q,10,q>=7?C.GREEN:q>=5?C.WARN:C.RED,undefined,false); ry+=38;
@@ -1551,7 +1508,7 @@ function drawBranchStaff(branch) {
     game.hireRects[stype]={x:hx,y:hy,w:hw,h:hh,salary:cfg.salary};
     if(mouse.clicked&&mouse.x>=hx&&mouse.x<=hx+hw&&mouse.y>=hy&&mouse.y<=hy+hh){
       consumeClick();
-      if(game.gs.money>=cfg.salary){game.gs.money-=cfg.salary;const s=new Staff(stype);branch.staff.push(s);game.gs.addNotif(`${s.name} eingestellt!`,'success');if(typeof sndHire==='function')sndHire();}
+      if(game.gs.money>=cfg.salary){game.gs.money-=cfg.salary;const s=new Staff(stype);branch.staff.push(s);game.gs.addNotif(`${s.name} eingestellt!`,'success');sndHire();}
       else game.gs.addNotif('Zu wenig Geld!','danger');
     }
     ry+=50;
@@ -1570,31 +1527,23 @@ function drawBranchStaff(branch) {
     fillRect(fx,fy,fw,fh,C.DARK_RED,null,0,4); drawText('Entlassen',FONTS.xxs,C.WHITE,fx+fw/2,fy+fh/2,'center','middle');
     game.fireRects.push({x:fx,y:fy,w:fw,h:fh,idx:i});
     if(mouse.clicked&&mouse.x>=fx&&mouse.x<=fx+fw&&mouse.y>=fy&&mouse.y<=fy+fh){
-      consumeClick(); const fired=branch.staff.splice(i,1)[0]; game.gs.addNotif(`${fired.name} entlassen.`,'warn'); if(typeof sndFire==='function')sndFire(); break;
+      consumeClick(); const fired=branch.staff.splice(i,1)[0]; game.gs.addNotif(`${fired.name} entlassen.`,'warn'); sndFire(); break;
     }
     ry+=38;
   }
 
-  // ─── SPA-TAG BUTTON ───
   ry+=6;
   const spaOnCooldown=branch.spa_cooldown>0;
   const spaHasStaff=branch.staff.length>0;
   const spaCanUse=spaHasStaff&&!spaOnCooldown;
   const spaCol=spaCanUse?C.TEAL:C.GRAY2;
-  const spaBorderCol=spaCanUse?C.TEAL:C.GRAY2;
-  fillRect(rx,ry,300,42,spaCol,spaBorderCol,spaCanUse?2:1,8);
-  // highlight on hover
+  fillRect(rx,ry,300,42,spaCol,spaCol,spaCanUse?2:1,8);
   const spaHov=mouse.x>=rx&&mouse.x<=rx+300&&mouse.y>=ry&&mouse.y<=ry+42;
   if(spaHov&&spaCanUse) fillRect(rx,ry,300,42,lerpColor(C.TEAL,C.WHITE,0.15),C.TEAL,2,8);
   drawText('🧖 Spa-Tag schenken',FONTS.sm,spaCanUse?C.BG:C.GRAY,rx+150,ry+21,'center','middle');
-  if(spaOnCooldown){
-    drawText(`Cooldown: noch ${branch.spa_cooldown} Tag${branch.spa_cooldown!==1?'e':''}`,FONTS.xs,C.ORANGE,rx+310,ry+5,'left','top');
-  } else if(spaHasStaff) {
-    drawText('+35% Moral für alle Mitarbeiter',FONTS.xs,C.TEXT2,rx+310,ry+5,'left','top');
-  } else {
-    drawText('Keine Mitarbeiter vorhanden',FONTS.xs,C.GRAY,rx+310,ry+5,'left','top');
-  }
-  // Morale summary bar
+  if(spaOnCooldown) drawText(`Cooldown: noch ${branch.spa_cooldown} Tag${branch.spa_cooldown!==1?'e':''}`,FONTS.xs,C.ORANGE,rx+310,ry+5,'left','top');
+  else if(spaHasStaff) drawText('+35% Moral für alle Mitarbeiter',FONTS.xs,C.TEXT2,rx+310,ry+5,'left','top');
+  else drawText('Keine Mitarbeiter vorhanden',FONTS.xs,C.GRAY,rx+310,ry+5,'left','top');
   if(branch.staff.length){
     const avgMorale=branch.staff.reduce((a,s)=>a+s.morale,0)/branch.staff.length;
     drawText('Ø Moral:',FONTS.xs,C.TEXT2,rx+310,ry+22,'left','top');
@@ -1687,7 +1636,7 @@ function drawNewBranchDialog() {
     fillRect(bx+30,by+120,bw-60,44,C.BG2,C.GOLD,1,6);
     drawText(ns.name+cursor,FONTS.md,C.WHITE,bx+40,by+130,'left','top');
     drawText('ENTER zum Bestätigen',FONTS.xs,C.GRAY,W/2,by+185,'center','top');
-    if(keyPressed==='Enter'&&ns.name.trim()){ns.phase='city';activateMobileInput('');consumeKey();}
+    if(keyPressed==='Enter'&&ns.name.trim()){ns.phase='city';activateMobileInput();consumeKey();}
     else if(keyPressed==='Escape'){game.newBranchState=null;deactivateMobileInput();consumeKey();}
     else if(keyPressed==='Backspace'){ns.name=ns.name.slice(0,-1);consumeKey();}
     else if(charTyped&&ns.name.length<30){ns.name+=charTyped;consumeKey();}
@@ -1697,7 +1646,7 @@ function drawNewBranchDialog() {
     fillRect(bx+30,by+150,bw-60,44,C.BG2,C.GOLD,1,6);
     drawText(ns.city+cursor,FONTS.md,C.WHITE,bx+40,by+160,'left','top');
     drawText('ENTER zum Bestätigen',FONTS.xs,C.GRAY,W/2,by+215,'center','top');
-    if(keyPressed==='Enter'&&ns.city.trim()){ns.phase='country';activateMobileInput(ns.country);consumeKey();}
+    if(keyPressed==='Enter'&&ns.city.trim()){ns.phase='country';activateMobileInput();consumeKey();}
     else if(keyPressed==='Escape'){game.newBranchState=null;deactivateMobileInput();consumeKey();}
     else if(keyPressed==='Backspace'){ns.city=ns.city.slice(0,-1);consumeKey();}
     else if(charTyped&&ns.city.length<30){ns.city+=charTyped;consumeKey();}
@@ -1754,10 +1703,9 @@ function drawModal() {
   }
 }
 
-
 // ─── RESEARCH SCREEN ───
 const RESEARCH_POS = {
-  schnittmaschine:  [150,200], premium_zutaten:[150,380], ki_kasse:[380,200],
+  schnittmaschine:   [150,200], premium_zutaten:[150,380], ki_kasse:[380,200],
   schnelle_lieferung:[380,380], eigene_logistik:[610,380], franchise:[610,200],
   brotfabrik:[840,380], fleischproduktion:[840,540], solar_energie:[150,540],
   loyalty_app:[380,540], geheimrezept:[610,540], mega_grill:[840,200],
@@ -1774,7 +1722,6 @@ function drawResearch() {
     drawBar(W-400,y0+28,380,12,node.progress,1,C.TEAL,undefined,false);
   }
 
-  // Connections
   for(const [nid,node] of Object.entries(gs.research_tree)){
     if(!RESEARCH_POS[nid]) continue;
     const [nx,ny]=RESEARCH_POS[nid];
@@ -1809,11 +1756,9 @@ function drawResearch() {
     const words=shortName.split(' ');
     for(let li=0;li<Math.min(2,words.length);li++) drawText(words[li],FONTS.xxs,C.TEXT,nx,ny+4+li*14,'center','top');
     if(hovered) drawText(`${formatMoney(node.cost)} | ${node.dur}T`,FONTS.xxs,C.GOLD,nx,ny+46,'center','top');
-
     if(hovered&&mouse.clicked){consumeClick();gs.startResearch(nid);}
   }
 
-  // Tooltip
   if(hoveredNode){
     const node=gs.research_tree[hoveredNode];
     const tw=320,th=105;
@@ -1821,7 +1766,6 @@ function drawResearch() {
     fillRect(tx,ty,tw,th,C.PANEL,C.GOLD,1,8);
     drawText(node.name,FONTS.sm,C.GOLD,tx+10,ty+10,'left','top');
     ctx.font=FONTS.xs; ctx.fillStyle=C.TEXT; ctx.textAlign='left'; ctx.textBaseline='top';
-    // word wrap desc
     const maxW=300; const words2=node.desc.split(' '); let line2='';
     const lines2=[]; for(const w of words2){const t=line2?line2+' '+w:w;if(ctx.measureText(t).width>maxW&&line2){lines2.push(line2);line2=w;}else line2=t;} if(line2)lines2.push(line2);
     for(let i=0;i<lines2.length;i++) drawText(lines2[i],FONTS.xs,C.TEXT,tx+10,ty+35+i*16,'left','top');
@@ -1829,7 +1773,6 @@ function drawResearch() {
     drawText(status,FONTS.xs,node.unlocked?C.GREEN:C.GOLD,tx+10,ty+80,'left','top');
   }
 
-  // Legend
   let ly=H-58;
   for(const [col,lbl] of [[C.GREEN,'Abgeschlossen'],[C.TEAL,'In Bearbeitung'],[C.GOLD,'Verfügbar'],[C.GRAY2,'Gesperrt']]){
     fillCirc(20,ly+8,6,col); drawText(lbl,FONTS.xxs,C.TEXT2,32,ly+2,'left','top'); ly+=18;
@@ -1849,7 +1792,6 @@ function drawStats() {
     miniChart(data,cx+8,cy+35,cw-16,ch-10,col);
   }
 
-  // Branch table
   const ty=y0+230;
   fillRect(20,ty,1240,260,C.PANEL,C.BORDER,1,8);
   drawText('🏪 Filial-Performance',FONTS.md,C.GOLD,30,ty+12,'left','top');
@@ -1865,7 +1807,6 @@ function drawStats() {
     for(let j=0;j<vals.length;j++) drawText(vals[j][0],FONTS.xs,vals[j][1],colX[j],ry+6,'left','top');
   }
 
-  // Sauce stats
   const sy=y0+510;
   fillRect(20,sy,400,170,C.PANEL,C.BORDER,1,8);
   drawText('🥫 Beliebteste Soßen',FONTS.sm,C.GOLD,30,sy+12,'left','top');
@@ -1880,7 +1821,6 @@ function drawStats() {
     drawText(String(cnt),FONTS.xxs,C.TEXT,350,ry+2,'left','top'); si2++;
   }
 
-  // KPIs
   fillRect(440,sy,400,170,C.PANEL,C.BORDER,1,8);
   drawText('🏢 Unternehmenskennzahlen',FONTS.sm,C.GOLD,450,sy+12,'left','top');
   const kpis=[['Filialen:',String(gs.branches.length)],['Gesamtkunden:',gs.total_customers_served.toLocaleString('de')],['Gesamtumsatz:',formatMoney(gs.total_revenue)],['Länder:',String(gs.countries_present.size)],['Spieltage:',String(gs.day)]];
@@ -1889,7 +1829,6 @@ function drawStats() {
     drawText(kpis[i][1],FONTS.sm,C.GOLD,830,sy+38+i*24,'right','top');
   }
 
-  // Competitors
   fillRect(860,sy,380,170,C.PANEL,C.BORDER,1,8);
   drawText('⚔ Konkurrenz',FONTS.sm,C.GOLD,870,sy+12,'left','top');
   if(gs.competitors.length) for(let i=0;i<Math.min(5,gs.competitors.length);i++){
@@ -1911,7 +1850,6 @@ function drawFinance() {
     drawText(boxes[i][1],FONTS.lg,boxes[i][2],bx+148,y0+75,'center','middle');
   }
 
-  // Revenue/expense chart
   const cy=y0+150;
   fillRect(20,cy,820,180,C.PANEL,C.BORDER,1,8);
   drawText('📈 Gewinn vs Ausgaben (30 Tage)',FONTS.sm,C.GOLD,30,cy+12,'left','top');
@@ -1928,7 +1866,6 @@ function drawFinance() {
   drawText('— Gewinn',FONTS.xxs,C.GREEN,cr[0]+cr[2]-10,cy+40,'right','top');
   drawText('— Ausgaben',FONTS.xxs,C.RED,cr[0]+cr[2]-10,cy+55,'right','top');
 
-  // Per-branch table
   const ty=y0+350;
   fillRect(20,ty,820,290,C.PANEL,C.BORDER,1,8);
   drawText('🏪 Filialkosten',FONTS.md,C.GOLD,30,ty+12,'left','top');
@@ -1937,19 +1874,16 @@ function drawFinance() {
   for(let i=0;i<hdrs2.length;i++) drawText(hdrs2[i],FONTS.xs,C.GOLD,hx[i],ty+36,'left','top');
   strokeLine(25,ty+52,835,ty+52,C.BORDER,1);
   const sortedB=[...gs.branches].sort((a,b)=>b.monthlyFixedCosts()-a.monthlyFixedCosts()).slice(0,7);
-  let totRent=0,totStaff=0,totMktg=0;
   for(let i=0;i<sortedB.length;i++){
     const b=sortedB[i]; const ry=ty+58+i*32;
     const rent=b.rent; const staff=b.staff.reduce((a,s)=>a+s.salary,0);
     const mktg=Object.entries(b.marketing).filter(([,v])=>v).reduce((a,[k])=>a+{flyer:200,social_media:500,influencer:2000,stadion:5000,tv:15000}[k],0);
     const total=rent+staff+mktg; const profit=b.daily_revenue*30-total;
-    totRent+=rent; totStaff+=staff; totMktg+=mktg;
     fillRect(25,ry-2,810,28,i%2===0?C.PANEL:C.BG2,null,0,3);
     const vals2=[[b.name.slice(0,14),C.TEXT],[`${rent.toFixed(0)}€`,C.RED2],[`${staff.toFixed(0)}€`,C.RED2],[`${mktg.toFixed(0)}€`,C.ORANGE],[`${total.toFixed(0)}€`,C.RED],[formatMoney(profit),moneyColor(profit)]];
     for(let j=0;j<vals2.length;j++) drawText(vals2[j][0],FONTS.xxs,vals2[j][1],hx[j],ry+6,'left','top');
   }
 
-  // Loan panel
   const lx=860,lyl=y0+150;
   fillRect(lx,lyl,380,200,C.PANEL,C.BORDER,1,8);
   drawText('🏦 Kreditoption',FONTS.sm,C.GOLD,lx+10,lyl+12,'left','top');
@@ -1963,37 +1897,109 @@ function drawFinance() {
   if(btnL50.update()){gs.money+=50000;gs.loan_debt+=50000;gs.loan_monthly_payment+=2500;gs.addNotif('50.000€ Kredit aufgenommen! +2500€ Zinsen/Mo','warn');}
 }
 
-// ─── OPTIONS SCREEN ───
+// ─── OPTIONS SCREEN ─── (REWORKED)
 function drawOptions() {
   const gs=game.gs; const y0=85;
-  drawText('⚙ Optionen',FONTS.lg,C.GOLD,W/2,y0+20,'center','top');
-  const cx=W/2;
-  drawText('Spielgeschwindigkeit:',FONTS.sm,C.TEXT2,cx-160,155,'left','top');
-  for(let i=0;i<4;i++){
-    const [lbl,spd]=[['1x',1.0],['2x',3.0],['4x',8.0],['8x',16.0]][i];
-    const rx=cx-160+i*80, ry=178;
-    const active=gs.game_speed===spd;
-    fillRect(rx,ry,74,30,active?C.GOLD:C.PANEL2,active?C.GOLD:C.BORDER,1,5);
-    drawText(lbl,FONTS.sm,active?C.BG:C.TEXT,rx+37,ry+15,'center','middle');
-    if(mouse.clicked&&mouse.x>=rx&&mouse.x<=rx+74&&mouse.y>=ry&&mouse.y<=ry+30){gs.game_speed=spd;consumeClick();}
-  }
 
-  const btnSave=new Button(cx-160,215,300,56,'💾 Spiel speichern (.txt)',C.GOLD,C.BG,FONTS.md);
-  const btnMenu=new Button(cx-160,295,300,50,'Zurück zum Hauptmenü',C.RED,C.WHITE);
+  // Title
+  drawText('⚙ Optionen',FONTS.lg,C.GOLD,W/2,y0+10,'center','top');
+
+  // ── Left column: gameplay ──
+  const lx=60, colW=500;
+  let ly=y0+65;
+
+  // Panel: Spielgeschwindigkeit
+  fillRect(lx,ly,colW,100,C.PANEL,C.BORDER,1,8);
+  drawText('Spielgeschwindigkeit',FONTS.sm,C.GOLD,lx+18,ly+14,'left','top');
+  const speeds=[[1,'1x'],[3,'2x'],[8,'4x'],[16,'8x']];
+  for(let i=0;i<speeds.length;i++){
+    const [spd,lbl]=speeds[i];
+    const bx=lx+18+i*108, by=ly+44, bw=100, bh=36;
+    const active=gs.game_speed===spd;
+    fillRect(bx,by,bw,bh,active?C.GOLD:C.PANEL2,active?C.GOLD:C.BORDER2,active?2:1,6);
+    drawText(lbl,FONTS.md,active?C.BG:C.TEXT,bx+bw/2,by+bh/2,'center','middle');
+    if(mouse.clicked&&mouse.x>=bx&&mouse.x<=bx+bw&&mouse.y>=by&&mouse.y<=by+bh){gs.game_speed=spd;consumeClick();}
+  }
+  ly+=116;
+
+  // Panel: Speichern & Laden
+  fillRect(lx,ly,colW,130,C.PANEL,C.BORDER,1,8);
+  drawText('Spielstand',FONTS.sm,C.GOLD,lx+18,ly+14,'left','top');
+
+  const btnSave=new Button(lx+18,ly+46,220,46,'💾 Spiel speichern',C.GOLD,C.BG,FONTS.md);
+  const btnMenu=new Button(lx+258,ly+46,220,46,'🏠 Hauptmenü',C.RED,C.WHITE,FONTS.md);
   btnSave.draw(); btnMenu.draw();
   if(btnSave.update()) gs.save(0);
-  if(btnMenu.update()){game.inGame=false;game.setScreen('main_menu');}
+  if(btnMenu.update()){
+    game.inGame=false;
+    game.setScreen('main_menu');
+  }
 
-  fillRect(cx-160,365,300,60,C.PANEL,C.BORDER,1,8);
-  drawText('💡 Tipp: Die .txt-Datei',FONTS.xs,C.GOLD,cx-148,373,'left','top');
-  drawText('kann über "Spiel laden"',FONTS.xs,C.TEXT2,cx-148,393,'left','top');
-  drawText('im Hauptmenü geladen werden.',FONTS.xs,C.TEXT2,cx-148,413,'left','top');
+  drawText('Speichern lädt eine .txt-Datei herunter, die über "Spiel laden" wieder eingeladen werden kann.',FONTS.xxs,C.GRAY,lx+18,ly+102,'left','top',colW-36);
+  ly+=146;
 
-  // Tips
-  fillRect(W-450,200,420,360,C.PANEL,C.BORDER,1,8);
-  drawText('💡 Spieltipps',FONTS.md,C.GOLD,W-240,218,'center','top');
-  const tips=['Eröffne zuerst in Kleinstädten,','bevor du in Großstädte gehst.','','Stelle Dönermeister + Azubi ein.','','Forsche früh in Schnittmaschine.','','Hygiene verfällt täglich – reinige','regelmäßig oder stelle Reiniger ein.','','Social Media lohnt sich ab Tag 1!','','Spare für Premium-Zutaten-Forschung.'];
-  for(let i=0;i<tips.length;i++) drawText(tips[i],FONTS.xs,C.TEXT2,W-440,248+i*20,'left','top');
+  // Panel: Lautstärke
+  fillRect(lx,ly,colW,160,C.PANEL,C.BORDER,1,8);
+  drawText('🔊 Lautstärke',FONTS.sm,C.GOLD,lx+18,ly+14,'left','top');
+
+  // Musik (Grün)
+  drawText('🎵 Musik',FONTS.sm,C.GREEN2,lx+18,ly+48,'left','top');
+  _sliders['music_vol'].x = lx+120;
+  _sliders['music_vol'].y = ly+48;
+  _sliders['music_vol'].w = colW-148;
+  const newMusicVol = updateSlider('music_vol', C.GREEN2);
+  musicVolume = newMusicVol;
+  _musicGain.gain.value = newMusicVol;
+
+  // SFX (Blau)
+  drawText('🔔 SFX',FONTS.sm,C.BLUE2,lx+18,ly+96,'left','top');
+  _sliders['sfx_vol'].x = lx+120;
+  _sliders['sfx_vol'].y = ly+96;
+  _sliders['sfx_vol'].w = colW-148;
+  const newSfxVol = updateSlider('sfx_vol', C.BLUE2);
+  sfxVolume = newSfxVol;
+  _sfxGain.gain.value = newSfxVol;
+
+  // Test-Button
+  const btnTestSfx = new Button(lx+18,ly+128,200,24,'▶ SFX testen',C.PANEL2,C.BLUE2,FONTS.xs);
+  btnTestSfx.draw();
+  if(btnTestSfx.update()) sndHire();
+
+  ly+=176;
+
+  // ── Right column: Tipps ──
+  const rx=600, rColW=640;
+  let ry=y0+65;
+
+  fillRect(rx,ry,rColW,390,C.PANEL,C.BORDER,1,8);
+  drawText('💡 Spieltipps',FONTS.md,C.GOLD,rx+rColW/2,ry+14,'center','top');
+  strokeLine(rx+20,ry+42,rx+rColW-20,ry+42,C.BORDER,1);
+
+  const tips=[
+    ['🏘','Kleinstädte zuerst – günstige Miete zum Aufwärmen.'],
+    ['👥','Stelle Dönermeister + Azubi ein für gute Effizienz.'],
+    ['🔬','Forsche früh in Schnittmaschine – +30% Produktion.'],
+    ['🧹','Hygiene verfällt täglich. Reiniger hält sie bei ≥80%.'],
+    ['📱','Social Media (+20% Kunden) lohnt sich ab Tag 1!'],
+    ['💰','Spare für Premium-Zutaten – Qualität verkauft sich besser.'],
+    ['📈','Beobachte Marktanteil: 40% = Sieg-Bedingung!'],
+    ['🏦','Kredit nur im Notfall – 5% Zinsen fressen Gewinne.'],
+    ['🎯','Ziel: 500 Filialen ODER 1 Mrd€ Umsatz für den Sieg.'],
+    ['⚡','Spieltempo 8x = Achievement! Vorsicht: Chaos.'],
+  ];
+  for(let i=0;i<tips.length;i++){
+    const [icon,txt]=tips[i];
+    const ty=ry+54+i*32;
+    if(i%2===0) fillRect(rx+12,ty-4,rColW-24,28,C.BG,null,0,3);
+    drawText(icon,FONTS.sm,C.GOLD,rx+22,ty,'left','top');
+    drawText(txt,FONTS.xs,C.TEXT2,rx+50,ty+2,'left','top');
+  }
+  ry+=406;
+
+  // Info: Version
+  fillRect(rx,ry,rColW,56,C.BG2,C.BORDER,1,8);
+  drawText('DÖNERIMPERIUM™  v1.0  —  2026',FONTS.xs,C.GRAY,rx+rColW/2,ry+10,'center','top');
+  drawText('Alle Rechte vorbehalten. Kein Döner wurde beim Spielen verletzt.',FONTS.xxs,C.GRAY2,rx+rColW/2,ry+30,'center','top');
 }
 
 // ─── ACHIEVEMENTS SCREEN ───
@@ -2008,10 +2014,6 @@ function drawAchievements() {
   const all=[...unlocked,...ACHIEVEMENTS.filter(a=>!gs.unlocked_achievements.has(a.id))];
   const totalRows=Math.ceil(all.length/cols);
   const maxScroll=Math.max(0,totalRows*(ch+gap)-(H-210));
-  // scroll via mouse
-  if(mouse.y>145&&mouse.y<H-65&&game.screen==='achievements'){
-    // handled in scroll event below
-  }
 
   ctx.save(); ctx.beginPath(); ctx.rect(0,145,W,H-210); ctx.clip();
   for(let i=0;i<all.length;i++){
@@ -2037,12 +2039,10 @@ let lastTime=0;
 
 function update(dt) {
   game.anim+=dt;
-  // Particles (main menu only)
   if(game.screen==='main_menu') for(const p of game.particles){
     p.x+=p.vx*dt; p.y+=p.vy*dt; p.life+=dt;
     if(p.life>=p.maxLife||p.y<-10) Object.assign(p,game.makeParticle(),{y:H+10});
   }
-  // Scroll: branch list
   if(game.screen==='branches'||game.screen==='staff'){
     const gs=game.gs; const lh=575, itemH=60;
     const totalH=gs.branches.length*itemH;
@@ -2066,7 +2066,6 @@ function update(dt) {
   tickToasts(dt);
 }
 
-// Scroll wheel
 window.addEventListener('wheel', e => {
   if(game.screen==='achievements'){
     const cols=2,ch=72,gap=10;
@@ -2106,8 +2105,6 @@ function draw() {
   else drawOverview();
   ctx.restore();
 
-  // FPS (optional, bottom left)
-  // fps display removed
   drawToasts();
 }
 
@@ -2116,7 +2113,6 @@ function loop(ts) {
   lastTime=ts;
   update(dt);
   draw();
-  // Reset per-frame input
   mouse.clicked=false; mouse.released=false;
   keyPressed=null; charTyped='';
   requestAnimationFrame(loop);
@@ -2126,5 +2122,3 @@ requestAnimationFrame(ts=>{ lastTime=ts; requestAnimationFrame(loop); });
 </script>
 </body>
 </html>
-
-//temporary reset btw.
