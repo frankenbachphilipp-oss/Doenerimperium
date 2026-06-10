@@ -2,50 +2,37 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<!-- FIX 1: viewport-fit=cover handles iPhone notch/safe-area; interactive-widget=resizes-content
-     prevents the canvas jumping when the on-screen keyboard appears on Android -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>DÖNERIMPERIUM™</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-
-/* FIX 2: Use dvh (dynamic viewport height) so iOS address bar changes don't
-   push the canvas off-screen. 100vh is the fallback for older browsers. */
 body {
   background: #0a0806;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;          /* fallback */
-  min-height: 100dvh;         /* dynamic: shrinks when iOS address bar shows */
+  min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
-  /* FIX 3: Prevent iOS rubber-band scroll from dragging the viewport */
   overscroll-behavior: none;
-  /* FIX 4: Safe-area insets for notched iPhones (bottom bar etc.) */
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
-
 #viewport {
   overflow: auto;
   width: 100vw;
-  height: 100vh;              /* fallback */
-  height: 100dvh;             /* dynamic viewport height */
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
-  /* FIX 5: Prevent iOS momentum scrolling from bouncing the frame */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
-
 canvas {
   display: block;
   image-rendering: crisp-edges;
-  /* FIX 6: manipulation prevents double-tap zoom (the main glitch cause on iOS/Android)
-     while still allowing single-tap and pinch-zoom we handle ourselves */
   touch-action: manipulation;
   flex-shrink: 0;
-  /* FIX 7: Prevent tap highlight flash on mobile */
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
@@ -62,16 +49,12 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 canvas.width = W; canvas.height = H;
 
-// ─── SOUND ENGINE (Web Audio API) ───
+// ─── SOUND ENGINE ───
 const _ac = new (window.AudioContext || window.webkitAudioContext)();
-
-// Master gain nodes for volume control
 const _musicGain = _ac.createGain();
 const _sfxGain   = _ac.createGain();
 _musicGain.connect(_ac.destination);
 _sfxGain.connect(_ac.destination);
-
-// Volume state (0-1)
 let musicVolume = 0.5;
 let sfxVolume   = 0.7;
 _musicGain.gain.value = musicVolume;
@@ -84,83 +67,66 @@ function _playSound(fn) {
   if(_ac.state==='suspended') _ac.resume();
   fn(_ac);
 }
-
 function sndSale() {
   _playSound(ac => {
     [880, 1320].forEach((freq, i) => {
-      const o = ac.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = freq;
+      const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
       const env = ac.createGain();
       env.gain.setValueAtTime(0, ac.currentTime + i*0.07);
       env.gain.linearRampToValueAtTime(0.18 * sfxVolume, ac.currentTime + i*0.07 + 0.01);
       env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i*0.07 + 0.18);
       o.connect(env); env.connect(_sfxGain);
-      o.start(ac.currentTime + i*0.07);
-      o.stop(ac.currentTime + i*0.07 + 0.2);
+      o.start(ac.currentTime + i*0.07); o.stop(ac.currentTime + i*0.07 + 0.2);
     });
   });
 }
-
 function sndNewBranch() {
   _playSound(ac => {
     [523, 659, 784, 1047].forEach((freq, i) => {
-      const o = ac.createOscillator();
-      o.type = 'triangle';
-      o.frequency.value = freq;
+      const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = freq;
       const env = ac.createGain();
       env.gain.setValueAtTime(0, ac.currentTime + i*0.1);
       env.gain.linearRampToValueAtTime(0.2 * sfxVolume, ac.currentTime + i*0.1 + 0.02);
       env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + i*0.1 + 0.25);
       o.connect(env); env.connect(_sfxGain);
-      o.start(ac.currentTime + i*0.1);
-      o.stop(ac.currentTime + i*0.1 + 0.3);
+      o.start(ac.currentTime + i*0.1); o.stop(ac.currentTime + i*0.1 + 0.3);
     });
   });
 }
-
 function sndError() {
   _playSound(ac => {
-    const o = ac.createOscillator();
-    o.type = 'sawtooth';
+    const o = ac.createOscillator(); o.type = 'sawtooth';
     o.frequency.setValueAtTime(180, ac.currentTime);
     o.frequency.linearRampToValueAtTime(100, ac.currentTime + 0.2);
     const env = ac.createGain();
     env.gain.setValueAtTime(0.15 * sfxVolume, ac.currentTime);
     env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.25);
     o.connect(env); env.connect(_sfxGain);
-    o.start(ac.currentTime);
-    o.stop(ac.currentTime + 0.25);
+    o.start(ac.currentTime); o.stop(ac.currentTime + 0.25);
   });
 }
-
 function sndHire() {
   _playSound(ac => {
-    const o = ac.createOscillator();
-    o.type = 'sine';
+    const o = ac.createOscillator(); o.type = 'sine';
     o.frequency.setValueAtTime(440, ac.currentTime);
     o.frequency.linearRampToValueAtTime(660, ac.currentTime + 0.12);
     const env = ac.createGain();
     env.gain.setValueAtTime(0.15 * sfxVolume, ac.currentTime);
     env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.2);
     o.connect(env); env.connect(_sfxGain);
-    o.start(ac.currentTime);
-    o.stop(ac.currentTime + 0.2);
+    o.start(ac.currentTime); o.stop(ac.currentTime + 0.2);
   });
 }
-
 function sndFire() {
   _playSound(ac => {
-    const o = ac.createOscillator();
-    o.type = 'sine';
+    const o = ac.createOscillator(); o.type = 'sine';
     o.frequency.setValueAtTime(440, ac.currentTime);
     o.frequency.linearRampToValueAtTime(220, ac.currentTime + 0.15);
     const env = ac.createGain();
     env.gain.setValueAtTime(0.13 * sfxVolume, ac.currentTime);
     env.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.2);
     o.connect(env); env.connect(_sfxGain);
-    o.start(ac.currentTime);
-    o.stop(ac.currentTime + 0.2);
+    o.start(ac.currentTime); o.stop(ac.currentTime + 0.2);
   });
 }
 
@@ -225,10 +191,6 @@ function _pinchDist(touches) {
   return Math.sqrt(dx*dx + dy*dy);
 }
 
-// FIX 8: getViewportSize() — uses visualViewport API when available (accurate on iOS),
-// falls back to window dimensions. This is the root cause of the "glitching frame" bug:
-// window.innerWidth/Height on iOS includes the address bar height, making the canvas
-// render too large and overflow the screen.
 function getViewportSize() {
   if (window.visualViewport) {
     return { w: window.visualViewport.width, h: window.visualViewport.height };
@@ -264,26 +226,15 @@ function resizeCanvas() {
 }
 
 resizeCanvas();
-
-// FIX 9: Listen to multiple resize signals:
-// - window 'resize': desktop + Android Chrome
-// - visualViewport 'resize': iOS Safari (fires when address bar shows/hides)
-// - 'orientationchange': device rotation, with a delay because iOS fires it
-//   before the dimensions have actually updated
 window.addEventListener('resize', resizeCanvas);
-
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', resizeCanvas);
 }
-
 window.addEventListener('orientationchange', () => {
-  // iOS reports old dimensions for ~100ms after orientationchange
   setTimeout(resizeCanvas, 150);
   setTimeout(resizeCanvas, 400);
 });
 
-// FIX 10: Force a resize on first user interaction to catch any initial
-// measurement errors (common on iOS when page loads with address bar visible)
 let _initialResizeDone = false;
 function _doInitialResize() {
   if (_initialResizeDone) return;
@@ -330,12 +281,11 @@ canvas.addEventListener('touchend', e => {
     _isPinching = false; _panLastX = e.touches[0].clientX; _panLastY = e.touches[0].clientY;
     _panActive = _pinchCurrentScale > 1.05;
   }
-  if (isIOS) {
-    if (mobileInputActive) { mobileInput.focus(); }
-    else {
-      mobileInput.style.pointerEvents = 'auto'; mobileInput.focus();
-      setTimeout(() => { if (!mobileInputActive) { mobileInput.blur(); mobileInput.style.pointerEvents = 'none'; } }, 300);
-    }
+
+  // FIX: Only refocus the hidden textarea on iOS when a text input is actually active.
+  // The previous code always called focus() on every tap → keyboard opened on every touch.
+  if (isIOS && mobileInputActive) {
+    mobileInput.focus();
   }
 }, {passive: false});
 
@@ -403,21 +353,18 @@ function consumeClick() { mouse.clicked = false; }
 function consumeKey()   { keyPressed = null; charTyped = ''; }
 
 // ─── SLIDER DRAG STATE ───
-const _sliders = {};  // id -> {x,y,w,val}
+const _sliders = {};
 let _dragSlider = null;
 
 function registerSlider(id, x, y, w, val) {
   _sliders[id] = {x, y, w, val};
   return val;
 }
-// Call each frame. Returns current value (0-1).
 function updateSlider(id, color) {
   const s = _sliders[id];
   if (!s) return 0;
   const h = 22, knobR = 11;
   const trackY = s.y + h/2;
-
-  // Drag logic
   if (mouse.clicked && mouse.x >= s.x - knobR && mouse.x <= s.x + s.w + knobR &&
       mouse.y >= s.y - 4 && mouse.y <= s.y + h + 4) {
     _dragSlider = id;
@@ -429,24 +376,18 @@ function updateSlider(id, color) {
       _dragSlider = null;
     }
   }
-
-  // Draw track bg
   fillRect(s.x, s.y, s.w, h, C.BG2, C.BORDER, 1, h/2);
-  // Draw filled portion
   const fillW = Math.max(h, s.val * s.w);
   ctx.beginPath();
   ctx.roundRect(s.x, s.y, fillW, h, h/2);
   ctx.fillStyle = color;
   ctx.fill();
-  // Knob
   const kx = s.x + s.val * s.w;
   fillCirc(kx, trackY, knobR, C.WHITE);
-  strokeLine(kx, trackY, kx, trackY, color, 1); // center dot
+  strokeLine(kx, trackY, kx, trackY, color, 1);
   ctx.beginPath(); ctx.arc(kx, trackY, knobR, 0, Math.PI*2);
   ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
-  // Pct label
   drawText(Math.round(s.val*100)+'%', FONTS.xxs, C.TEXT2, s.x + s.w + 20, s.y + 3, 'left', 'top');
-
   return s.val;
 }
 
@@ -1143,7 +1084,6 @@ const game = {
 
   init() {
     for(let i=0;i<40;i++) this.particles.push(this.makeParticle());
-    // Register sliders with initial values
     registerSlider('music_vol', 0, 0, 260, musicVolume);
     registerSlider('sfx_vol',   0, 0, 260, sfxVolume);
   },
@@ -1980,18 +1920,14 @@ function drawFinance() {
   if(btnL50.update()){gs.money+=50000;gs.loan_debt+=50000;gs.loan_monthly_payment+=2500;gs.addNotif('50.000€ Kredit aufgenommen! +2500€ Zinsen/Mo','warn');}
 }
 
-// ─── OPTIONS SCREEN ─── (REWORKED)
+// ─── OPTIONS SCREEN ───
 function drawOptions() {
   const gs=game.gs; const y0=85;
-
-  // Title
   drawText('⚙ Optionen',FONTS.lg,C.GOLD,W/2,y0+10,'center','top');
 
-  // ── Left column: gameplay ──
   const lx=60, colW=500;
   let ly=y0+65;
 
-  // Panel: Spielgeschwindigkeit
   fillRect(lx,ly,colW,100,C.PANEL,C.BORDER,1,8);
   drawText('Spielgeschwindigkeit',FONTS.sm,C.GOLD,lx+18,ly+14,'left','top');
   const speeds=[[1,'1x'],[3,'2x'],[8,'4x'],[16,'8x']];
@@ -2005,27 +1941,19 @@ function drawOptions() {
   }
   ly+=116;
 
-  // Panel: Speichern & Laden
   fillRect(lx,ly,colW,130,C.PANEL,C.BORDER,1,8);
   drawText('Spielstand',FONTS.sm,C.GOLD,lx+18,ly+14,'left','top');
-
   const btnSave=new Button(lx+18,ly+46,220,46,'💾 Spiel speichern',C.GOLD,C.BG,FONTS.md);
   const btnMenu=new Button(lx+258,ly+46,220,46,'🏠 Hauptmenü',C.RED,C.WHITE,FONTS.md);
   btnSave.draw(); btnMenu.draw();
   if(btnSave.update()) gs.save(0);
-  if(btnMenu.update()){
-    game.inGame=false;
-    game.setScreen('main_menu');
-  }
-
+  if(btnMenu.update()){game.inGame=false;game.setScreen('main_menu');}
   drawText('Speichern lädt eine .txt-Datei herunter, die über "Spiel laden" wieder eingeladen werden kann.',FONTS.xxs,C.GRAY,lx+18,ly+102,'left','top',colW-36);
   ly+=146;
 
-  // Panel: Lautstärke
   fillRect(lx,ly,colW,160,C.PANEL,C.BORDER,1,8);
   drawText('🔊 Lautstärke',FONTS.sm,C.GOLD,lx+18,ly+14,'left','top');
 
-  // Musik (Grün)
   drawText('🎵 Musik',FONTS.sm,C.GREEN2,lx+18,ly+48,'left','top');
   _sliders['music_vol'].x = lx+120;
   _sliders['music_vol'].y = ly+48;
@@ -2034,7 +1962,6 @@ function drawOptions() {
   musicVolume = newMusicVol;
   _musicGain.gain.value = newMusicVol;
 
-  // SFX (Blau)
   drawText('🔔 SFX',FONTS.sm,C.BLUE2,lx+18,ly+96,'left','top');
   _sliders['sfx_vol'].x = lx+120;
   _sliders['sfx_vol'].y = ly+96;
@@ -2043,14 +1970,11 @@ function drawOptions() {
   sfxVolume = newSfxVol;
   _sfxGain.gain.value = newSfxVol;
 
-  // Test-Button
   const btnTestSfx = new Button(lx+18,ly+128,200,24,'▶ SFX testen',C.PANEL2,C.BLUE2,FONTS.xs);
   btnTestSfx.draw();
   if(btnTestSfx.update()) sndHire();
-
   ly+=176;
 
-  // ── Right column: Tipps ──
   const rx=600, rColW=640;
   let ry=y0+65;
 
@@ -2079,7 +2003,6 @@ function drawOptions() {
   }
   ry+=406;
 
-  // Info: Version
   fillRect(rx,ry,rColW,56,C.BG2,C.BORDER,1,8);
   drawText('DÖNERIMPERIUM™  v1.0  —  2026',FONTS.xs,C.GRAY,rx+rColW/2,ry+10,'center','top');
   drawText('Alle Rechte vorbehalten. Kein Döner wurde beim Spielen verletzt.',FONTS.xxs,C.GRAY2,rx+rColW/2,ry+30,'center','top');
