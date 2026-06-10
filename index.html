@@ -1978,45 +1978,16 @@ function drawOptions() {
     if(mouse.clicked&&mouse.x>=rx&&mouse.x<=rx+74&&mouse.y>=ry&&mouse.y<=ry+30){gs.game_speed=spd;consumeClick();}
   }
 
-  // ─── SFX SLIDER ───
-  const sliderX=cx-160, sliderW=300, sliderY=228;
-  drawText('🔊 SFX-Lautstärke:',FONTS.sm,C.CYAN,sliderX,sliderY,'left','top');
-  const sfxTrackY=sliderY+28; const sfxTrackH=8;
-  fillRect(sliderX,sfxTrackY,sliderW,sfxTrackH,C.PANEL2,C.BORDER,1,4);
-  fillRect(sliderX,sfxTrackY,sliderW*game.sfxVolume,sfxTrackH,C.CYAN,null,0,4);
-  const sfxKnobX=sliderX+sliderW*game.sfxVolume;
-  fillCircle(sfxKnobX,sfxTrackY+sfxTrackH/2,10,C.CYAN);
-  drawText(`${Math.round(game.sfxVolume*100)}%`,FONTS.xs,C.CYAN,sliderX+sliderW+14,sfxTrackY,'left','top');
-  // drag
-  if(mouse.down&&mouse.y>=sfxTrackY-12&&mouse.y<=sfxTrackY+20&&mouse.x>=sliderX-10&&mouse.x<=sliderX+sliderW+10){
-    game.sfxVolume=Math.max(0,Math.min(1,(mouse.x-sliderX)/sliderW));
-    sfxGain.gain.value=game.sfxVolume;
-  }
-
-  // ─── MUSIC SLIDER ───
-  const mscY=sliderY+56;
-  drawText('🎵 Musik-Lautstärke:',FONTS.sm,C.GREEN,sliderX,mscY,'left','top');
-  const mscTrackY=mscY+28; const mscTrackH=8;
-  fillRect(sliderX,mscTrackY,sliderW,mscTrackH,C.PANEL2,C.BORDER,1,4);
-  fillRect(sliderX,mscTrackY,sliderW*game.musicVolume,mscTrackH,C.GREEN,null,0,4);
-  const mscKnobX=sliderX+sliderW*game.musicVolume;
-  fillCircle(mscKnobX,mscTrackY+mscTrackH/2,10,C.GREEN);
-  drawText(`${Math.round(game.musicVolume*100)}%`,FONTS.xs,C.GREEN,sliderX+sliderW+14,mscTrackY,'left','top');
-  if(mouse.down&&mouse.y>=mscTrackY-12&&mouse.y<=mscTrackY+20&&mouse.x>=sliderX-10&&mouse.x<=sliderX+sliderW+10){
-    game.musicVolume=Math.max(0,Math.min(1,(mouse.x-sliderX)/sliderW));
-    if(typeof musicGain!=='undefined') musicGain.gain.value=game.musicVolume;
-  }
-
-  const btnSave=new Button(cx-160,360,300,56,'💾 Spiel speichern (.txt)',C.GOLD,C.BG,FONTS.md);
-  const btnMenu=new Button(cx-160,440,300,50,'Zurück zum Hauptmenü',C.RED,C.WHITE);
+  const btnSave=new Button(cx-160,215,300,56,'💾 Spiel speichern (.txt)',C.GOLD,C.BG,FONTS.md);
+  const btnMenu=new Button(cx-160,295,300,50,'Zurück zum Hauptmenü',C.RED,C.WHITE);
   btnSave.draw(); btnMenu.draw();
   if(btnSave.update()) gs.save(0);
   if(btnMenu.update()){game.inGame=false;game.setScreen('main_menu');}
 
-  fillRect(cx-160,510,300,60,C.PANEL,C.BORDER,1,8);
-  drawText('💡 Tipp: Die .txt-Datei',FONTS.xs,C.GOLD,cx-148,518,'left','top');
-  drawText('kann über "Spiel laden"',FONTS.xs,C.TEXT2,cx-148,538,'left','top');
-  drawText('im Hauptmenü geladen werden.',FONTS.xs,C.TEXT2,cx-148,558,'left','top');
+  fillRect(cx-160,365,300,60,C.PANEL,C.BORDER,1,8);
+  drawText('💡 Tipp: Die .txt-Datei',FONTS.xs,C.GOLD,cx-148,373,'left','top');
+  drawText('kann über "Spiel laden"',FONTS.xs,C.TEXT2,cx-148,393,'left','top');
+  drawText('im Hauptmenü geladen werden.',FONTS.xs,C.TEXT2,cx-148,413,'left','top');
 
   // Tips
   fillRect(W-450,200,420,360,C.PANEL,C.BORDER,1,8);
