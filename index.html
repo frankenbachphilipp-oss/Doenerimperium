@@ -2,14 +2,54 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- FIX 1: viewport-fit=cover handles iPhone notch/safe-area; interactive-widget=resizes-content
+     prevents the canvas jumping when the on-screen keyboard appears on Android -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>DÖNERIMPERIUM™</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0806; display: flex; justify-content: center; align-items: center;
-  min-height: 100vh; overflow: hidden; }
-#viewport { overflow: auto; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-canvas { display: block; image-rendering: crisp-edges; touch-action: none; flex-shrink: 0; }
+
+/* FIX 2: Use dvh (dynamic viewport height) so iOS address bar changes don't
+   push the canvas off-screen. 100vh is the fallback for older browsers. */
+body {
+  background: #0a0806;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;          /* fallback */
+  min-height: 100dvh;         /* dynamic: shrinks when iOS address bar shows */
+  overflow: hidden;
+  /* FIX 3: Prevent iOS rubber-band scroll from dragging the viewport */
+  overscroll-behavior: none;
+  /* FIX 4: Safe-area insets for notched iPhones (bottom bar etc.) */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+#viewport {
+  overflow: auto;
+  width: 100vw;
+  height: 100vh;              /* fallback */
+  height: 100dvh;             /* dynamic viewport height */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* FIX 5: Prevent iOS momentum scrolling from bouncing the frame */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+canvas {
+  display: block;
+  image-rendering: crisp-edges;
+  /* FIX 6: manipulation prevents double-tap zoom (the main glitch cause on iOS/Android)
+     while still allowing single-tap and pinch-zoom we handle ourselves */
+  touch-action: manipulation;
+  flex-shrink: 0;
+  /* FIX 7: Prevent tap highlight flash on mobile */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
 </style>
 </head>
 <body>
@@ -184,31 +224,74 @@ function _pinchDist(touches) {
   const dy = touches[0].clientY - touches[1].clientY;
   return Math.sqrt(dx*dx + dy*dy);
 }
+
+// FIX 8: getViewportSize() — uses visualViewport API when available (accurate on iOS),
+// falls back to window dimensions. This is the root cause of the "glitching frame" bug:
+// window.innerWidth/Height on iOS includes the address bar height, making the canvas
+// render too large and overflow the screen.
+function getViewportSize() {
+  if (window.visualViewport) {
+    return { w: window.visualViewport.width, h: window.visualViewport.height };
+  }
+  return { w: window.innerWidth, h: window.innerHeight };
+}
+
 function applyZoom(scale) {
   _pinchCurrentScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, scale));
-  const base = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const { w, h } = getViewportSize();
+  const base = Math.min(w / W, h / H);
   const s = base * _pinchCurrentScale;
   canvas.style.width  = s * W + 'px';
   canvas.style.height = s * H + 'px';
   const vp = document.getElementById('viewport');
   if (vp) {
-    vp.style.justifyContent = s * W <= window.innerWidth  ? 'center' : 'flex-start';
-    vp.style.alignItems     = s * H <= window.innerHeight ? 'center' : 'flex-start';
+    vp.style.justifyContent = s * W <= w ? 'center' : 'flex-start';
+    vp.style.alignItems     = s * H <= h ? 'center' : 'flex-start';
   }
 }
+
 function resizeCanvas() {
-  const base = Math.min(window.innerWidth / W, window.innerHeight / H);
+  const { w, h } = getViewportSize();
+  const base = Math.min(w / W, h / H);
   const s = base * _pinchCurrentScale;
   canvas.style.width  = s * W + 'px';
   canvas.style.height = s * H + 'px';
   const vp = document.getElementById('viewport');
   if (vp) {
-    vp.style.justifyContent = s * W <= window.innerWidth  ? 'center' : 'flex-start';
-    vp.style.alignItems     = s * H <= window.innerHeight ? 'center' : 'flex-start';
+    vp.style.justifyContent = s * W <= w ? 'center' : 'flex-start';
+    vp.style.alignItems     = s * H <= h ? 'center' : 'flex-start';
   }
 }
+
 resizeCanvas();
+
+// FIX 9: Listen to multiple resize signals:
+// - window 'resize': desktop + Android Chrome
+// - visualViewport 'resize': iOS Safari (fires when address bar shows/hides)
+// - 'orientationchange': device rotation, with a delay because iOS fires it
+//   before the dimensions have actually updated
 window.addEventListener('resize', resizeCanvas);
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', resizeCanvas);
+}
+
+window.addEventListener('orientationchange', () => {
+  // iOS reports old dimensions for ~100ms after orientationchange
+  setTimeout(resizeCanvas, 150);
+  setTimeout(resizeCanvas, 400);
+});
+
+// FIX 10: Force a resize on first user interaction to catch any initial
+// measurement errors (common on iOS when page loads with address bar visible)
+let _initialResizeDone = false;
+function _doInitialResize() {
+  if (_initialResizeDone) return;
+  _initialResizeDone = true;
+  resizeCanvas();
+}
+document.addEventListener('touchstart', _doInitialResize, { once: true, passive: true });
+document.addEventListener('click', _doInitialResize, { once: true });
 
 let _panActive = false, _panLastX = 0, _panLastY = 0;
 
