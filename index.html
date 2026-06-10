@@ -7,12 +7,13 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0a0806; display: flex; justify-content: center; align-items: center;
-  min-height: 100vh; overflow: auto; }
-canvas { display: block; image-rendering: crisp-edges; touch-action: none; }
+  min-height: 100vh; overflow: hidden; }
+#viewport { overflow: auto; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+canvas { display: block; image-rendering: crisp-edges; touch-action: none; flex-shrink: 0; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<div id="viewport"><canvas id="c"></canvas></div>
 <script>
 'use strict';
 // ═══════════════════════════════════════════════════════
@@ -116,6 +117,12 @@ function applyZoom(scale) {
   const s = base * _pinchCurrentScale;
   canvas.style.width  = s * W + 'px';
   canvas.style.height = s * H + 'px';
+  // Center in viewport when smaller, allow overflow when larger
+  const vp = document.getElementById('viewport');
+  if (vp) {
+    vp.style.justifyContent = s * W <= window.innerWidth  ? 'center' : 'flex-start';
+    vp.style.alignItems     = s * H <= window.innerHeight ? 'center' : 'flex-start';
+  }
 }
 
 function resizeCanvas() {
@@ -123,6 +130,11 @@ function resizeCanvas() {
   const s = base * _pinchCurrentScale;
   canvas.style.width  = s * W + 'px';
   canvas.style.height = s * H + 'px';
+  const vp = document.getElementById('viewport');
+  if (vp) {
+    vp.style.justifyContent = s * W <= window.innerWidth  ? 'center' : 'flex-start';
+    vp.style.alignItems     = s * H <= window.innerHeight ? 'center' : 'flex-start';
+  }
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
@@ -207,10 +219,11 @@ canvas.addEventListener('touchmove', e => {
     applyZoom(_pinchBaseScale * dampedRatio);
   } else if (e.touches.length === 1) {
     if (_panActive) {
-      // Scroll the page to pan
       const dx = e.touches[0].clientX - _panLastX;
       const dy = e.touches[0].clientY - _panLastY;
-      window.scrollBy(-dx, -dy);
+      const vp = document.getElementById('viewport');
+      vp.scrollLeft -= dx;
+      vp.scrollTop  -= dy;
       _panLastX = e.touches[0].clientX;
       _panLastY = e.touches[0].clientY;
     } else if (!_isPinching) {
