@@ -131,7 +131,6 @@ function sndFire() {
 }
 function sndBoot() {
   _playSound(ac => {
-    // Deep "power on" hum
     const o = ac.createOscillator(); o.type = 'triangle';
     o.frequency.setValueAtTime(80, ac.currentTime);
     o.frequency.linearRampToValueAtTime(220, ac.currentTime + 0.4);
@@ -275,6 +274,20 @@ window.addEventListener('orientationchange', () => {
   setTimeout(resizeCanvas, 400);
 });
 
+// ─── FULLSCREEN ───
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => {
+      addToast('Vollbild nicht verfügbar: ' + err.message, 'warn');
+    });
+  } else {
+    document.exitFullscreen();
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  setTimeout(resizeCanvas, 100);
+});
+
 let _initialResizeDone = false;
 function _doInitialResize() {
   if (_initialResizeDone) return;
@@ -379,6 +392,7 @@ canvas.addEventListener('mousedown', e => { if(e.button===0){mouse.down=true;mou
 canvas.addEventListener('mouseup',   e => { if(e.button===0){mouse.down=false;mouse.released=true;} });
 document.addEventListener('keydown', e => {
   if(mobileInputActive) return;
+  if(e.key === 'F11') { e.preventDefault(); toggleFullscreen(); return; }
   keys[e.key] = true; keyPressed = e.key;
   if(e.key.length === 1) charTyped += e.key;
   if(['Backspace','Enter','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
@@ -1571,6 +1585,11 @@ function drawHUD() {
   if(btn2x.update()) gs.game_speed=3;
   if(btn3x.update()) gs.game_speed=8;
 
+  // ─── FULLSCREEN BUTTON (neben Achievements) ───
+  const isFS = !!document.fullscreenElement;
+  const btnFS=new Button(W-374,8,100,28,isFS?'⛶ Fenster':'⛶ Vollbild',C.PANEL2,C.TEAL,FONTS.xs);
+  btnFS.draw(); if(btnFS.update()) toggleFullscreen();
+
   const btnAch=new Button(W-268,8,100,28,'Achievements',C.PANEL2,C.GOLD,FONTS.xs);
   btnAch.draw(); if(btnAch.update()) game.setScreen('achievements');
 
@@ -1762,7 +1781,6 @@ function drawBranchInfo(branch) {
     for(const ev of branch.active_events) {drawText(`• ${ev.name} (noch ${ev.remaining||'?'} Tage)`,FONTS.xs,typeColor(ev.type),rx,ry,'left','top');ry+=20;}}
 }
 
-// ── THE ONLY CHANGED LINE: ry starts at 247 instead of 122 ──
 function drawBranchRecipe(branch) {
   const rx=430; let ry=180;
   for(let i=0;i<branch.recipes.length;i++){
@@ -2284,6 +2302,15 @@ function drawOptions() {
   btnTestSfx.draw();
   if(btnTestSfx.update()) sndHire();
   ly+=176;
+
+  // ─── FULLSCREEN OPTION ───
+  fillRect(lx,ly,colW,70,C.PANEL,C.BORDER,1,8);
+  drawText('🖥 Darstellung',FONTS.sm,C.GOLD,lx+18,ly+14,'left','top');
+  const isFS=!!document.fullscreenElement;
+  const btnFsOpt=new Button(lx+18,ly+36,220,24,isFS?'⛶ Vollbild beenden':'⛶ Vollbild aktivieren',C.TEAL,C.BG,FONTS.xs);
+  btnFsOpt.draw(); if(btnFsOpt.update()) toggleFullscreen();
+  drawText('Oder F11 drücken',FONTS.xxs,C.GRAY,lx+250,ly+42,'left','top');
+  ly+=86;
 
   const rx=600, rColW=640;
   let ry=y0+65;
