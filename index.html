@@ -1764,7 +1764,7 @@ function drawBranchInfo(branch) {
 
 // ── THE ONLY CHANGED LINE: ry starts at 247 instead of 122 ──
 function drawBranchRecipe(branch) {
-  const rx=430; let ry=176;
+  const rx=430; let ry=200;
   for(let i=0;i<branch.recipes.length;i++){
     const sel=i===game.selectedRecipe%branch.recipes.length;
     fillRect(rx+i*90,ry,85,28,sel?C.GOLD:C.PANEL2,C.BORDER,1,4);
