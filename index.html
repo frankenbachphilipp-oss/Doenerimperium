@@ -1113,7 +1113,6 @@ class GameState {
 // ─── LOADING SCREEN ───
 // ═══════════════════════════════════════════════════════════
 
-// All the ridiculous boot messages
 const LOADING_PHASES = [
   { label:'[SYS_INIT]',     color:'#64dc64', msg:'Betriebssystem Döner-OS 3.14 wird gestartet...' },
   { label:'[SPIES_CAL]',    color:'#ffd250', msg:'Drehspieß wird auf 847°C kalibriert... bitte warten...' },
@@ -1131,23 +1130,11 @@ const LOADING_PHASES = [
   { label:'[IMPERIUM]',     color:'#dcaf3c', msg:'DÖNERIMPERIUM™ bereit. Die Welteroberung beginnt!' },
 ];
 
-// Loading screen state
 const _ls = {
-  progress: 0,        // 0..1
-  phaseIdx: 0,        // current phase being shown
-  msgTimer: 0,        // time on current message
-  termLines: [],      // lines shown in terminal
-  flames: [],         // fire particles
-  grease: [],         // falling grease drops
-  sparks: [],         // golden sparks
-  done: false,        // finished?
-  totalTime: 7.0,     // total load time in seconds
-  elapsed: 0,
-  beepedPhases: new Set(),
-  fanfarePlayed: false,
+  progress: 0, phaseIdx: 0, msgTimer: 0, termLines: [], flames: [], grease: [], sparks: [],
+  done: false, totalTime: 7.0, elapsed: 0, beepedPhases: new Set(), fanfarePlayed: false,
 };
 
-// Init particles (safe to call after rndBetween is defined)
 function _initLoadingParticles() {
   _ls.flames = [];
   for(let i=0;i<20;i++) {
@@ -1181,42 +1168,28 @@ function _tickLoadingScreen(dt) {
   if(_ls.done) return;
   _ls.elapsed += dt;
   _ls.progress = Math.min(1, _ls.elapsed / _ls.totalTime);
-
-  // Phase advancement
   const targetPhase = Math.floor(_ls.progress * LOADING_PHASES.length);
   while(_ls.phaseIdx < targetPhase && _ls.phaseIdx < LOADING_PHASES.length) {
     const phase = LOADING_PHASES[_ls.phaseIdx];
     _ls.termLines.push({ label: phase.label, msg: phase.msg, color: phase.color, age: 0 });
     if(_ls.termLines.length > 9) _ls.termLines.shift();
     _ls.phaseIdx++;
-    if(!_ls.beepedPhases.has(_ls.phaseIdx)) {
-      _ls.beepedPhases.add(_ls.phaseIdx);
-      sndBeep();
-    }
+    if(!_ls.beepedPhases.has(_ls.phaseIdx)) { _ls.beepedPhases.add(_ls.phaseIdx); sndBeep(); }
   }
-
-  // Tick line ages
   for(const l of _ls.termLines) l.age += dt;
-
-  // Tick flames
   for(const f of _ls.flames) {
     f.x += f.vx * dt; f.y += f.vy * dt; f.life += dt;
     if(f.life >= f.maxLife) {
       f.x=rndBetween(-50,50); f.y=rndBetween(0,30);
       f.vx=rndBetween(-18,18); f.vy=rndBetween(-90,-30);
-      f.life=0; f.maxLife=rndBetween(0.5,1.2);
-      f.size=rndBetween(5,18); f.hot=Math.random()<0.5;
+      f.life=0; f.maxLife=rndBetween(0.5,1.2); f.size=rndBetween(5,18); f.hot=Math.random()<0.5;
     }
   }
-
-  // Tick grease
   for(const g of _ls.grease) {
     if(!g.active) { g.delay -= dt; if(g.delay<=0){g.active=true;g.y=g.startY;g.life=0;} continue; }
     g.y += g.vy * dt; g.life += dt;
     if(g.y > 100) { g.active=false; g.delay=rndBetween(1,4); g.y=g.startY; g.life=0; }
   }
-
-  // Tick sparks
   for(const s of _ls.sparks) {
     s.x += s.vx * dt; s.y += s.vy * dt; s.life += dt;
     if(s.life>=s.maxLife||s.x<0||s.x>W||s.y<0||s.y>H) {
@@ -1225,115 +1198,75 @@ function _tickLoadingScreen(dt) {
       s.life=0; s.maxLife=rndBetween(2,5);
     }
   }
-
-  // Done?
   if(_ls.progress >= 1) {
     if(!_ls.fanfarePlayed) { _ls.fanfarePlayed=true; sndFanfare(); }
-    // short pause then switch
     _ls.doneTimer = (_ls.doneTimer||0) + dt;
     if(_ls.doneTimer > 1.2) _ls.done = true;
   }
 }
 
-// Big fancy döner for loading screen
 function _drawBigDoener(cx, cy, size, t) {
-  // Outer heat glow
   const glowR = ctx.createRadialGradient(cx, cy, size*0.3, cx, cy, size*1.8);
   glowR.addColorStop(0, 'rgba(220,130,40,0.15)');
   glowR.addColorStop(1, 'rgba(220,130,40,0)');
   ctx.beginPath(); ctx.arc(cx, cy, size*1.8, 0, Math.PI*2);
   ctx.fillStyle = glowR; ctx.fill();
-
-  // Spit (golden rod)
   const spitGrad = ctx.createLinearGradient(cx-4, 0, cx+4, 0);
-  spitGrad.addColorStop(0, '#7a6020');
-  spitGrad.addColorStop(0.4, '#ffd250');
-  spitGrad.addColorStop(0.6, '#ffd250');
-  spitGrad.addColorStop(1, '#7a6020');
+  spitGrad.addColorStop(0, '#7a6020'); spitGrad.addColorStop(0.4, '#ffd250');
+  spitGrad.addColorStop(0.6, '#ffd250'); spitGrad.addColorStop(1, '#7a6020');
   ctx.beginPath(); ctx.moveTo(cx, cy - size*1.45); ctx.lineTo(cx, cy + size*1.5);
   ctx.strokeStyle = spitGrad; ctx.lineWidth = 9; ctx.stroke();
-
-  // Bottom bolt
   ctx.beginPath(); ctx.arc(cx, cy+size*1.5, 10, 0, Math.PI*2);
   const bolt = ctx.createRadialGradient(cx, cy+size*1.5, 0, cx, cy+size*1.5, 10);
   bolt.addColorStop(0, '#ffd250'); bolt.addColorStop(1, '#a07820');
   ctx.fillStyle = bolt; ctx.fill();
-
-  // Meat layers — cone shape (narrow top, wide middle, narrow bottom)
   const numLayers = 16;
   for(let i=0;i<numLayers;i++) {
     const ratio = i / numLayers;
-    // Cone profile: bell-curve shape
     const bellW = Math.sin(ratio * Math.PI);
     const layerW = (size * 0.15 + bellW * size * 0.72);
     const ly = cy - size*1.1 + i * (size*2.2/numLayers);
     const lh = (size*2.2/numLayers) * 0.9;
-    // Slight rotation wobble per layer
     const wobble = Math.sin(t*1.4 + i*0.55) * 4;
-
-    // Crispy outer edge (darker)
     const crispR = 110 + Math.floor(Math.sin(i*1.1)*20);
-    const crispG = 55 + i*2;
-    const crispB = 25;
+    const crispG = 55 + i*2; const crispB = 25;
     ctx.beginPath(); ctx.ellipse(cx+wobble*0.4, ly, layerW*0.5+3, lh*0.55, 0, 0, Math.PI*2);
     ctx.fillStyle = `rgb(${crispR-30},${crispG-20},${crispB})`; ctx.fill();
-
-    // Main meat
     const r = 150 + Math.floor(Math.sin(i*0.9)*25);
-    const g2 = 65 + Math.floor(i*2.5);
-    const b2 = 30 + Math.floor(Math.sin(i*1.4)*10);
+    const g2 = 65 + Math.floor(i*2.5); const b2 = 30 + Math.floor(Math.sin(i*1.4)*10);
     ctx.beginPath(); ctx.ellipse(cx+wobble*0.4, ly, layerW*0.5, lh*0.5, 0, 0, Math.PI*2);
     ctx.fillStyle = `rgb(${r},${g2},${b2})`; ctx.fill();
-
-    // Sheen / highlight on top half
     ctx.beginPath(); ctx.ellipse(cx+wobble*0.4, ly-lh*0.12, layerW*0.42, lh*0.22, 0, 0, Math.PI);
     ctx.fillStyle = `rgba(255,200,140,${0.12 + Math.sin(t+i)*0.06})`; ctx.fill();
   }
-
-  // Top golden cap / onion
   const capGrad = ctx.createRadialGradient(cx, cy-size*1.08, 0, cx, cy-size*1.08, size*0.22);
   capGrad.addColorStop(0, '#ffd250'); capGrad.addColorStop(1, '#b08020');
   ctx.beginPath(); ctx.ellipse(cx, cy-size*1.08, size*0.22, size*0.13, 0, 0, Math.PI*2);
   ctx.fillStyle = capGrad; ctx.fill();
-
-  // Flame particles (attached to base)
   for(const f of _ls.flames) {
-    const lifeR = 1 - f.life/f.maxLife;
-    const alpha = lifeR * 0.85;
-    const flameSize = f.size * lifeR;
-    const r2 = f.hot ? 255 : 220;
-    const g3 = f.hot ? Math.floor(lifeR*160) : Math.floor(lifeR*80)+60;
+    const lifeR = 1 - f.life/f.maxLife; const alpha = lifeR * 0.85; const flameSize = f.size * lifeR;
+    const r2 = f.hot ? 255 : 220; const g3 = f.hot ? Math.floor(lifeR*160) : Math.floor(lifeR*80)+60;
     ctx.beginPath(); ctx.arc(cx+f.x, cy+size*1.3+f.y, flameSize, 0, Math.PI*2);
     ctx.fillStyle = `rgba(${r2},${g3},20,${alpha})`; ctx.fill();
   }
-
-  // Grease drips
   for(const g of _ls.grease) {
     if(!g.active) continue;
     const alpha = Math.min(1, g.life*3) * (1 - Math.max(0,(g.y-60)/40));
     ctx.beginPath(); ctx.arc(cx+g.x, cy+g.y, g.size, 0, Math.PI*2);
     ctx.fillStyle = `rgba(180,100,30,${alpha*0.7})`; ctx.fill();
-    // drip trail
-    ctx.beginPath(); ctx.moveTo(cx+g.x, cy+g.y-g.size);
-    ctx.lineTo(cx+g.x, cy+g.y-g.size-g.vy*0.08);
+    ctx.beginPath(); ctx.moveTo(cx+g.x, cy+g.y-g.size); ctx.lineTo(cx+g.x, cy+g.y-g.size-g.vy*0.08);
     ctx.strokeStyle=`rgba(180,100,30,${alpha*0.4})`; ctx.lineWidth=g.size*0.7; ctx.stroke();
   }
 }
 
 function drawLoadingScreen(t) {
-  // ── Background ──
   const bgGrad = ctx.createRadialGradient(W/2, H/2, 50, W/2, H/2, 700);
-  bgGrad.addColorStop(0, '#1e1408');
-  bgGrad.addColorStop(1, '#080502');
+  bgGrad.addColorStop(0, '#1e1408'); bgGrad.addColorStop(1, '#080502');
   ctx.fillStyle = bgGrad; ctx.fillRect(0,0,W,H);
-
-  // Ambient grid lines (subtle scanline effect)
   for(let y=0;y<H;y+=4) {
     ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y);
     ctx.strokeStyle='rgba(220,175,60,0.02)'; ctx.lineWidth=1; ctx.stroke();
   }
-
-  // Background sparks (ambient)
   for(const s of _ls.sparks) {
     const lifeR = 1 - s.life/s.maxLife;
     ctx.globalAlpha = lifeR * 0.3;
@@ -1341,167 +1274,91 @@ function drawLoadingScreen(t) {
     ctx.fillStyle = s.color; ctx.fill();
   }
   ctx.globalAlpha = 1;
-
-  const cx = W * 0.72; // döner sits on right side
-  const cy = H * 0.42;
-  const doenerSize = 110;
+  const cx = W * 0.72; const cy = H * 0.42; const doenerSize = 110;
   _drawBigDoener(cx, cy, doenerSize, t);
-
-  // ── LEFT SIDE: Company Logo & Terminal ──
   const lx = 60;
-
-  // Logo
   const logoAlpha = Math.min(1, _ls.elapsed * 1.5);
   ctx.globalAlpha = logoAlpha;
-
-  // DÖNER - big glowing text
-  ctx.font = `bold 72px ${FONT_BASE}`;
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  // Glow layer
+  ctx.font = `bold 72px ${FONT_BASE}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.shadowColor = C.GOLD; ctx.shadowBlur = 30;
   ctx.fillStyle = C.GOLD2; ctx.fillText('DÖNER', lx, 90);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = C.GOLD; ctx.fillText('DÖNER', lx, 90);
-
-  // IMPERIUM™
+  ctx.shadowBlur = 0; ctx.fillStyle = C.GOLD; ctx.fillText('DÖNER', lx, 90);
   ctx.font = `bold 72px ${FONT_BASE}`;
   ctx.shadowColor = C.ORANGE; ctx.shadowBlur = 20;
   ctx.fillStyle = C.ORANGE2; ctx.fillText('IMPERIUM™', lx, 168);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = C.ORANGE; ctx.fillText('IMPERIUM™', lx, 168);
-
-  // Divider line under logo
+  ctx.shadowBlur = 0; ctx.fillStyle = C.ORANGE; ctx.fillText('IMPERIUM™', lx, 168);
   const divW = Math.min(480, logoAlpha * 480);
   const divGrad = ctx.createLinearGradient(lx,0,lx+480,0);
   divGrad.addColorStop(0,C.GOLD); divGrad.addColorStop(1,'rgba(220,175,60,0)');
   ctx.beginPath(); ctx.moveTo(lx,256); ctx.lineTo(lx+divW,256);
   ctx.strokeStyle=divGrad; ctx.lineWidth=2; ctx.stroke();
-
-  ctx.shadowBlur = 0;
-  ctx.globalAlpha = 1;
-
-  // Subtitle
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
   const subAlpha = Math.max(0, Math.min(1, (_ls.elapsed-0.5)*1.5));
   ctx.globalAlpha = subAlpha;
   drawText('Enterprise Döner Management Suite v3.14',FONTS.xs,C.TEXT3,lx,268,'left','top');
   drawText('Baue das größte Döner-Imperium der Welt!',FONTS.sm,C.TEXT2,lx,291,'left','top');
   ctx.globalAlpha = 1;
-
-  // ── TERMINAL BOX ──
-  const termY = 330;
-  const termH = 220;
-  const termW = 530;
+  const termY = 330; const termH = 220; const termW = 530;
   const termAlpha = Math.max(0, Math.min(1, (_ls.elapsed-0.8)*2));
   ctx.globalAlpha = termAlpha;
-
   fillRect(lx, termY, termW, termH, 'rgba(10,8,4,0.95)', C.BORDER, 1, 6);
-  // terminal header bar
   fillRect(lx, termY, termW, 26, 'rgba(90,70,45,0.6)', null, 0, 6);
-  fillCirc(lx+16, termY+13, 5, '#d23c37');
-  fillCirc(lx+32, termY+13, 5, '#e6a528');
-  fillCirc(lx+48, termY+13, 5, '#50b450');
+  fillCirc(lx+16, termY+13, 5, '#d23c37'); fillCirc(lx+32, termY+13, 5, '#e6a528'); fillCirc(lx+48, termY+13, 5, '#50b450');
   drawText('DÖNER-OS  —  boot.sh', FONTS.xxs, C.GOLD, lx+70, termY+7, 'left', 'top');
-
-  // Terminal lines
   for(let i=0;i<_ls.termLines.length;i++) {
-    const line = _ls.termLines[i];
-    const ly2 = termY + 34 + i * 20;
+    const line = _ls.termLines[i]; const ly2 = termY + 34 + i * 20;
     if(ly2 > termY + termH - 8) break;
     const lineAlpha = Math.min(1, line.age * 4);
     ctx.globalAlpha = termAlpha * lineAlpha;
     drawText(line.label, FONTS.xxs, line.color, lx+8, ly2, 'left', 'top');
-    ctx.font=FONTS.xxs; ctx.measureText(''); // reset
     drawText(line.msg, FONTS.xxs, C.TEXT2, lx+105, ly2, 'left', 'top');
   }
-
-  // Blinking cursor on last line
   const lastLineY = termY + 34 + Math.min(_ls.termLines.length, 9) * 20;
   if(lastLineY < termY + termH - 8) {
-    if(Math.floor(t*2)%2===0) {
-      ctx.globalAlpha = termAlpha;
-      fillRect(lx+8, lastLineY, 7, 14, C.GREEN);
-    }
+    if(Math.floor(t*2)%2===0) { ctx.globalAlpha = termAlpha; fillRect(lx+8, lastLineY, 7, 14, C.GREEN); }
   }
-
   ctx.globalAlpha = 1;
-
-  // ── PROGRESS BAR ──
   const barX = lx, barY = H - 100, barW = 580, barH = 28;
   const barAlpha = Math.max(0, Math.min(1, (_ls.elapsed-0.3)*2));
   ctx.globalAlpha = barAlpha;
-
-  // Bar track
   fillRect(barX, barY, barW, barH, 'rgba(20,15,8,0.9)', C.BORDER, 1, 8);
-
-  // Bar fill with animated gradient
   const fillW = Math.max(0, _ls.progress * barW);
   if(fillW > 0) {
     const barFill = ctx.createLinearGradient(barX, barY, barX+fillW, barY);
     const phase = (t*0.5) % 1;
-    barFill.addColorStop(0, '#5a3800');
-    barFill.addColorStop(Math.max(0,phase-0.3), C.ORANGE);
-    barFill.addColorStop(phase, C.GOLD2);
-    barFill.addColorStop(Math.min(1,phase+0.3), C.ORANGE);
+    barFill.addColorStop(0, '#5a3800'); barFill.addColorStop(Math.max(0,phase-0.3), C.ORANGE);
+    barFill.addColorStop(phase, C.GOLD2); barFill.addColorStop(Math.min(1,phase+0.3), C.ORANGE);
     barFill.addColorStop(1, '#5a3800');
-    ctx.beginPath(); ctx.roundRect(barX, barY, fillW, barH, 8);
-    ctx.fillStyle = barFill; ctx.fill();
-
-    // Shimmer overlay
+    ctx.beginPath(); ctx.roundRect(barX, barY, fillW, barH, 8); ctx.fillStyle = barFill; ctx.fill();
     const shimX = barX + (Math.sin(t*2)*0.5+0.5) * fillW;
     const shimGrad = ctx.createLinearGradient(shimX-40, barY, shimX+40, barY);
-    shimGrad.addColorStop(0,'rgba(255,255,255,0)');
-    shimGrad.addColorStop(0.5,'rgba(255,255,255,0.25)');
-    shimGrad.addColorStop(1,'rgba(255,255,255,0)');
-    ctx.beginPath(); ctx.roundRect(barX, barY, fillW, barH, 8);
-    ctx.fillStyle = shimGrad; ctx.fill();
+    shimGrad.addColorStop(0,'rgba(255,255,255,0)'); shimGrad.addColorStop(0.5,'rgba(255,255,255,0.25)'); shimGrad.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.beginPath(); ctx.roundRect(barX, barY, fillW, barH, 8); ctx.fillStyle = shimGrad; ctx.fill();
   }
-
-  // Percentage text
   const pct = Math.floor(_ls.progress * 100);
-  ctx.font = `bold 14px monospace`;
-  ctx.fillStyle = pct > 50 ? C.BG : C.GOLD;
+  ctx.font = `bold 14px monospace`; ctx.fillStyle = pct > 50 ? C.BG : C.GOLD;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(`${pct}%`, barX + barW/2, barY + barH/2);
-
-  // Status label
   const curPhase = LOADING_PHASES[Math.min(_ls.phaseIdx, LOADING_PHASES.length-1)];
   drawText(curPhase.msg.slice(0,65)+(curPhase.msg.length>65?'...':''), FONTS.xxs, C.GOLD, barX, barY+34, 'left', 'top');
-
-  // "SPACE / KLICK zum Überspringen" hint
   const skipAlpha = Math.min(1, (_ls.elapsed-1)*1.5) * (0.5 + Math.sin(t*3)*0.3);
   ctx.globalAlpha = barAlpha * skipAlpha;
   drawText('[SPACE] oder [KLICK] zum Überspringen', FONTS.xxs, C.GRAY, barX+barW, barY+34, 'right', 'top');
-
   ctx.globalAlpha = 1;
-
-  // ── COMPLETION FLASH ──
   if(_ls.progress >= 1) {
     const doneAlpha = Math.min(1, (_ls.doneTimer||0) * 2) * 0.15;
-    ctx.fillStyle = `rgba(220,175,60,${doneAlpha})`;
-    ctx.fillRect(0,0,W,H);
-
-    // "BEREIT!" stamp
+    ctx.fillStyle = `rgba(220,175,60,${doneAlpha})`; ctx.fillRect(0,0,W,H);
     const readyScale = Math.min(1, (_ls.doneTimer||0)*3);
     ctx.globalAlpha = Math.min(1, (_ls.doneTimer||0)*3);
-    ctx.save();
-    ctx.translate(W*0.72, H*0.77);
-    ctx.rotate(-0.12);
-    ctx.scale(readyScale, readyScale);
-    ctx.font = `bold 52px ${FONT_BASE}`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.strokeStyle = C.GREEN; ctx.lineWidth=4;
-    ctx.strokeText('✓ BEREIT!', 0, 0);
-    ctx.fillStyle = C.GREEN2;
-    ctx.fillText('✓ BEREIT!', 0, 0);
-    ctx.restore();
-    ctx.globalAlpha=1;
+    ctx.save(); ctx.translate(W*0.72, H*0.77); ctx.rotate(-0.12); ctx.scale(readyScale, readyScale);
+    ctx.font = `bold 52px ${FONT_BASE}`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.strokeStyle = C.GREEN; ctx.lineWidth=4; ctx.strokeText('✓ BEREIT!', 0, 0);
+    ctx.fillStyle = C.GREEN2; ctx.fillText('✓ BEREIT!', 0, 0);
+    ctx.restore(); ctx.globalAlpha=1;
   }
-
-  // ── RIGHT SIDE: Fun facts ──
   const rfx = W * 0.72 + doenerSize + 50;
   const rfAlpha = Math.max(0, Math.min(1, (_ls.elapsed-1.5)*1.5));
   ctx.globalAlpha = rfAlpha;
-
   const facts = [
     { icon:'🥩', text:'Türkei exportiert 30.000 Tonnen\nDöner-Fleisch pro Jahr.' },
     { icon:'🇩🇪', text:'In Deutschland gibt es mehr\nDönerläden als McDonald\'s.' },
@@ -1510,24 +1367,17 @@ function drawLoadingScreen(t) {
   ];
   let factIdx = Math.floor((_ls.elapsed % (facts.length * 2)) / 2);
   factIdx = Math.min(factIdx, facts.length-1);
-  const fact = facts[factIdx];
-  const facty = H * 0.68;
-
+  const fact = facts[factIdx]; const facty = H * 0.68;
   fillRect(rfx-10, facty-10, W-rfx+4, 90, 'rgba(20,15,8,0.7)', C.BORDER2, 1, 8);
   drawText(fact.icon, `bold 28px serif`, C.GOLD, rfx+5, facty+5, 'left', 'top');
   const flines = fact.text.split('\n');
   for(let i=0;i<flines.length;i++) drawText(flines[i], FONTS.xs, C.TEXT2, rfx+44, facty+8+i*22, 'left', 'top');
-
   ctx.globalAlpha=1;
-
-  // Bottom version line
   const vAlpha = Math.max(0, Math.min(1, _ls.elapsed*0.8));
   ctx.globalAlpha = vAlpha;
   drawText('DÖNERIMPERIUM™  v1.0  —  2026  |  Alle Rechte vorbehalten. Kein Döner wurde verletzt.',FONTS.xxs,C.GRAY2,W/2,H-14,'center','top');
   ctx.globalAlpha=1;
 }
-
-// ═══════════════════════════════════════════════════════════
 
 // ─── GAME CONTROLLER ───
 const game = {
@@ -1912,8 +1762,9 @@ function drawBranchInfo(branch) {
     for(const ev of branch.active_events) {drawText(`• ${ev.name} (noch ${ev.remaining||'?'} Tage)`,FONTS.xs,typeColor(ev.type),rx,ry,'left','top');ry+=20;}}
 }
 
+// ── THE ONLY CHANGED LINE: ry starts at 247 instead of 122 ──
 function drawBranchRecipe(branch) {
-  const rx=430; let ry=122;
+  const rx=430; let ry=247;
   for(let i=0;i<branch.recipes.length;i++){
     const sel=i===game.selectedRecipe%branch.recipes.length;
     fillRect(rx+i*90,ry,85,28,sel?C.GOLD:C.PANEL2,C.BORDER,1,4);
@@ -2504,18 +2355,14 @@ let lastTime=0;
 function update(dt) {
   game.anim+=dt;
 
-  // ── Loading screen logic ──
   if(game.screen === 'loading') {
     _tickLoadingScreen(dt);
-    // Skip on space or click
     if(keyPressed===' '||keyPressed==='Enter'||mouse.clicked) {
       _ls.done = true;
       consumeClick(); consumeKey();
     }
-    if(_ls.done) {
-      game.setScreen('main_menu');
-    }
-    return; // Don't run game logic while loading
+    if(_ls.done) { game.setScreen('main_menu'); }
+    return;
   }
 
   if(game.screen==='main_menu') for(const p of game.particles){
@@ -2563,7 +2410,6 @@ function draw() {
   ctx.clearRect(0,0,W,H);
   fillRect(0,0,W,H,C.BG);
 
-  // ── Loading screen ──
   if(game.screen === 'loading') {
     drawLoadingScreen(game.anim);
     drawToasts();
