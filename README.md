@@ -1,13 +1,7 @@
 # DÖNERIMPERIUM™
 
-## Starten
-```
-pip install pygame-ce
-python3 main.py
-```
-
 ## Steuerung
-- **Maus** – Alles klickbar
+- **Maus/Tastatur** – Alles klickbar
 - **⏸/1x/2x/3x** – Spielgeschwindigkeit (oben rechts)
 - **Navigation** – Tabs oben in der Leiste
 
