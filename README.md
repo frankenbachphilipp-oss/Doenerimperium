@@ -11,6 +11,8 @@
 - Marktführer werden (>40% Marktanteil)
 - Europaweit expandieren (20+ Länder)
 
+
+## Guide
 📖 Spieler-Guide: DÖNERIMPERIUM™
 Einstieg
 Du startest mit einer einzigen Filiale in Dönerhausen — einer Kleinstadt mit wenig Kundschaft, aber niedrigen Kosten. Ziel ist es, ein weltweites Döner-Imperium aufzubauen, die Konkurrenz zu verdrängen und möglichst viele Siegbedingungen zu erfüllen.
